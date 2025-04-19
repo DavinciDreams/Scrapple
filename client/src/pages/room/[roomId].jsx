@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/router';
 import io from 'socket.io-client';
 import Head from 'next/head';
+import ScrabbleGame from '../../components/ScrabbleGame';
+
 
 const socket = io('https://acrophylia.onrender.com', {
   withCredentials: true,
@@ -40,6 +42,7 @@ const GameRoom = () => {
   const [timeLeft, setTimeLeft] = useState(null);
   const [gameStarted, setGameStarted] = useState(false);
   const chatListRef = useRef(null);
+  
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -137,6 +140,8 @@ const GameRoom = () => {
       setTimeLeft(null);
       setGameStarted(false);
       setCategory('');
+      setGameState('playing');
+
     });
 
     socket.on('chatMessage', ({ senderId, senderName, message }) => {
@@ -264,6 +269,9 @@ const GameRoom = () => {
   return (
     <>
       <Head>
+        <title>{`Scrabble - Room ${roomId || ''}`}</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="description" content="Join a Scrabble game room and play with friends!" />
         <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
         <style>{`
           @media (max-width: 480px) {
@@ -358,7 +366,7 @@ const GameRoom = () => {
 
             {gameState === 'waiting' && nameSet && (
               <div style={styles.section}>
-                <p>Waiting for players... (Game starts with 4 players, bots added if needed)</p>
+                <p>Waiting for players... (Game starts with 2-4 players, bots added if needed)</p>
                 <button style={styles.button} onClick={startGame} disabled={!isCreator || isStarting}>
                   {isStarting ? 'Starting...' : 'Start Game'}
                 </button>
