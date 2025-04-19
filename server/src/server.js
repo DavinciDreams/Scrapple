@@ -5,6 +5,8 @@ const cors = require('cors');
 const { OpenAI } = require('openai');
 const { generateLetters } = require('./utils/gameLogic');
 const { addBotPlayers } = require('./utils/botLogic');
+const { ScrabbleGame } = require('./utils/scrabbleLogic');
+
 
 require('dotenv').config();
 
@@ -64,7 +66,7 @@ async function callLLM(prompt) {
   }
 }
 
-async function generateCategory() {
+/*async function generateCategory() {
   const prompt = 'Generate a single-word category for an acronym game (e.g., "Space", "Animals", "Tech"). Return only the word, no explanation.';
   try {
     const category = await callLLM(prompt);
@@ -74,7 +76,7 @@ async function generateCategory() {
     return 'Random';
   }
 }
-
+*/
 io.on('connection', (socket) => {
   console.debug('New client connected:', socket.id);
 
@@ -141,26 +143,21 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('playerUpdate', { players: room.players, roomName: room.name });
     if (room.started) {
       socket.emit('gameStarted');
-      if (room.round > 0) {
-        socket.emit('newRound', {
-          roundNum: room.round,
-          letterSet: room.letters,
-          timeLeft: room.submissionTimer
-            ? Math.max(0, Math.floor((room.submissionTimer._idleStart + room.submissionTimer._idleTimeout - Date.now()) / 1000))
-            : room.votingTimer
-            ? Math.max(0, Math.floor((room.votingTimer._idleStart + room.votingTimer._idleTimeout - Date.now()) / 1000))
-            : 0,
-          category: room.category,
-        });
-        if (room.submissions.size > 0) {
-          socket.emit('submissionsReceived', Array.from(room.submissions));
-          if (room.votes.size > 0) socket.emit('votingStart');
-        }
+      socket.emit('boardUpdate', {
+        board: room.game.board,
+        lastMove: room.game.lastMove
+      });
+      const playerTiles = room.game.getPlayerTiles(socket.id);
+      if (playerTiles) {
+        socket.emit('tileUpdate', { newTiles: playerTiles });
       }
+      socket.emit('turnUpdate', { currentPlayer: room.game.currentTurn });
     }
+
+    io.to(roomId).emit('playerUpdate', { players: room.players, roomName: room.name });
   });
 
-  socket.on('setRoomName', ({ roomId, roomName }) => {
+    socket.on('setRoomName', ({ roomId, roomName }) => {
     const room = rooms.get(roomId);
     if (room && socket.id === room.creatorId && !room.started) {
       room.name = roomName.trim().substring(0, 20); // Sanitize and limit length
@@ -184,12 +181,88 @@ io.on('connection', (socket) => {
     if (room && socket.id === room.creatorId && !room.started) {
       room.started = true;
       startGame(roomId);
+   room.players.forEach(player => {
+        const tiles = room.game.addPlayer(player.id);
+        io.to(player.id).emit('tileUpdate', { newTiles: tiles });
+      });
+      io.to(roomId).emit('gameStarted');
+      io.to(roomId).emit('turnUpdate', { currentPlayer: room.game.currentTurn });
+      io.to(roomId).emit('boardUpdate', {
+        board: room.game.board,
+        lastMove: null
+      });
     }
   });
+
+  socket.on('placeTile', ({ roomId, row, col, tile, tileIndex }) => {
+    const room = rooms.get(roomId);
+    if (!room || !room.started || room.game.currentTurn !== socket.id) return;
+
+    const placement = { row, col, tile };
+    room.game.board[row][col] = tile;
+    
+    io.to(roomId).emit('boardUpdate', {
+      board: room.game.board,
+      lastMove: placement
+    });
+  });
+  socket.on('submitMove', async ({ roomId, placedTiles }) => {
+    const room = rooms.get(roomId);
+    if (!room || !room.started) {
+      socket.emit('moveError', { message: 'Game has not started' });
+      return;
+    }
+    
+    if (room.game.currentTurn !== socket.id) {
+      socket.emit('moveError', { message: 'Not your turn' });
+      return;
+    }
+
+    try {
+      const moveResult = await room.game.makeMove(socket.id, placedTiles);
+      if (moveResult) {
+        const gameState = room.game.getGameState();
+        io.to(roomId).emit('boardUpdate', {
+          board: gameState.board,
+          lastMove: gameState.lastMove
+        });
+        
+        room.players.forEach(player => {
+          const playerState = gameState.players.find(p => p.id === player.id);
+          if (playerState) {
+            player.score = playerState.score;
+          }
+          if (player.id === socket.id) {
+            const newTiles = room.game.getPlayerTiles(player.id);
+            io.to(player.id).emit('tileUpdate', { newTiles });
+          }
+        });
+
+        io.to(roomId).emit('playerUpdate', { players: room.players, roomName: room.name });
+        io.to(roomId).emit('turnUpdate', { currentPlayer: gameState.currentTurn });
+
+        if (gameState.remainingTiles === 0) {
+          const winner = room.players.reduce((prev, curr) => 
+            prev.score > curr.score ? prev : curr
+          );
+          io.to(roomId).emit('gameEnd', { winner });
+          room.started = false;
+        }
+      } else {
+        socket.emit('moveError', { message: 'Invalid move - please check word placement' });
+      }
+    } catch (error) {
+      console.error('Move error:', error);
+      socket.emit('moveError', { message: 'An error occurred while validating your move' });
+    }
+  });
+
 
   socket.on('resetGame', (roomId) => {
     const room = rooms.get(roomId);
     if (room && socket.id === room.creatorId) {
+            room.game = new ScrabbleGame();
+
       if (room.submissionTimer) clearInterval(room.submissionTimer);
       if (room.votingTimer) clearInterval(room.votingTimer);
       room.round = 0;
@@ -298,6 +371,7 @@ async function startGame(roomId) {
 async function startRound(roomId) {
   const room = rooms.get(roomId);
   room.round++;
+  
   room.letters = generateLetters(room.round);
   const category = await generateCategory();
   room.category = category;
@@ -312,7 +386,7 @@ async function startRound(roomId) {
 
   io.to(roomId).emit('newRound', { roundNum: room.round, letterSet: room.letters, timeLeft, category });
 
-  for (const player of room.players) {
+  /*for (const player of room.players) {
     if (player.isBot) {
       const prompt = `Generate a creative acronym phrase using the letters ${room.letters.join(', ')} for the category "${category}". Return only the phrase, no explanation.`;
       try {
@@ -322,7 +396,7 @@ async function startRound(roomId) {
         room.submissions.set(player.id, room.letters.join(''));
       }
     }
-  }
+  }*/
 
   room.submissionTimer = setInterval(() => {
     timeLeft--;
@@ -360,7 +434,7 @@ function startVoting(roomId) {
   }, 1000);
 }
 
-async function simulateBotVotes(roomId) {
+/*async function simulateBotVotes(roomId) {
   const room = rooms.get(roomId);
   if (room && room.votingTimer) {
     const submissionList = Array.from(room.submissions).map(([id, acronym]) => ({
@@ -395,7 +469,7 @@ async function simulateBotVotes(roomId) {
       }
     }
   }
-}
+}*/
 
 function endVoting(roomId) {
   const room = rooms.get(roomId);
@@ -434,6 +508,7 @@ function calculateResults(room) {
     updatedPlayers: room.players
   };
 }
+
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
