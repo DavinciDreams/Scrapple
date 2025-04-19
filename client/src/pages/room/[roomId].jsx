@@ -14,7 +14,7 @@ const socket = io('https://acrophylia.onrender.com', {
   timeout: 30000,
 });
 
-function GameRoom() {
+const GameRoom = () => {
   const router = useRouter();
   const { roomId: urlRoomId, creatorId } = router.query;
   const [roomId, setRoomId] = useState(urlRoomId || null);
@@ -42,7 +42,7 @@ function GameRoom() {
   const [timeLeft, setTimeLeft] = useState(null);
   const [gameStarted, setGameStarted] = useState(false);
   const chatListRef = useRef(null);
-
+  
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -211,23 +211,23 @@ function GameRoom() {
     }
   };
 
-  /* const submitAcronym = () => {
-     if (acronym && roomId && !hasSubmitted) {
-       socket.emit('submitAcronym', { roomId, acronym });
-       setHasSubmitted(true);
-       setAcronym('');
-     }
-   };<style>{`
- 
-   const submitVote = (submissionId) => {
-     if (!hasVoted && roomId && submissionId !== socket.id) {
-       socket.emit('vote', { roomId, submissionId });
-       setHasVoted(true);
-     } else if (submissionId === socket.id) {
-       alert('You cannot vote for your own submission!');
-     }
-   };
- */
+ /* const submitAcronym = () => {
+    if (acronym && roomId && !hasSubmitted) {
+      socket.emit('submitAcronym', { roomId, acronym });
+      setHasSubmitted(true);
+      setAcronym('');
+    }
+  };<style>{`
+
+  const submitVote = (submissionId) => {
+    if (!hasVoted && roomId && submissionId !== socket.id) {
+      socket.emit('vote', { roomId, submissionId });
+      setHasVoted(true);
+    } else if (submissionId === socket.id) {
+      alert('You cannot vote for your own submission!');
+    }
+  };
+*/
   const leaveRoom = () => {
     if (roomId) {
       socket.emit('leaveRoom', roomId);
@@ -265,85 +265,198 @@ function GameRoom() {
   };
 
   const inviteLink = roomId ? `${window.location.origin}/room/${roomId}` : '';
-  <meta name="description" content="Join a Scrabble game room and play with friends!" />;
+  <meta name="description" content="Join a Scrabble game room and play with friends!" />
 
   return (
     <>
       <Head>
         <title>{`Scrabble - Room ${roomId || ''}`}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
+ 
       </Head>
-      <div className="game-room-container">
-                {roomId ? (
-<>
-                  <h1 className="room-title">{roomName || `Room ${roomId}`}</h1>
-                  <p>Please join a room to start playing!</p>
-                  </>
-                ) : (
-                  <p>Please join a room to start playing!</p>
-                )}
-      </div>
-        <div className="status-container">
-          {!isConnected && (
-            <div className="reconnecting-badge">
-              <span className="reconnecting-text">RECONNECTING</span>
-              <span className="reconnecting-dots">...</span>
-            </div>
-          )}
-        </div>
-
-        {isCreator && !roomNameSet && gameState === 'waiting' && (
-
-
-          { gameStarted } && (
-            <ScrabbleGame
-              roomId={roomId}
-              players={players}
-              isCreator={isCreator}
-              socket={socket} 
-              />
-          )},
-        <PlayerList players={players} leaveRoom={leaveRoom} />
-        <div className="container">
-          <h3 className="section-header">GAME CHAT</h3>
-          <div
-            className="chat-list-wrapper"
-            ref={chatContainerRef}
-            onScroll={checkIfNearBottom}
-          >
-            <ul className="chat-list" ref={chatListRef}>
-              {chatMessages.map((msg, index) => (
-                <li
-                  key={index}
-                  className={`chat-item ${msg.senderId === socket.id ? 'own-message' : ''}`}
-                >
-                  <div className="pill chat-pill">
-                    {msg.senderName}
+       <div className="game-room-container">
+        {roomId ? (
+          <>
+           <header className="header">
+              <div className="room-title-container">
+                 {isEditingRoomName && isCreator && !roomNameSet && gameState === 'waiting' ? (
+                  <div className="room-name-edit">
+                    <input
+                      className="input"
+                      type="text"
+                      value={roomName}
+                      onChange={(e) => setRoomName(e.target.value)}
+                      placeholder="Enter room name"
+                      maxLength={20}
+                      onKeyPress={(e) => e.key === 'Enter' && setRoomNameHandler()}
+                    />
+                    <button className="button" onClick={setRoomNameHandler}>
+                      Save
+                    </button>
+                    <button
+                      className="button"
+                      onClick={() => setIsEditingRoomName(false)}
+                    >
+                      Cancel
+                    </button>
                   </div>
-                  <div className="chat-message">{msg.message}</div>
+                ) : (
+                  <h2 className="title">
+                    {roomName || `Room ${roomId}`}
+                    {isCreator && !roomNameSet && gameState === 'waiting' && (
+                      <button
+                        onClick={() => setIsEditingRoomName(true)}
+                        aria-label="Edit Room Name"
+                      >
+                        ✏️
+                      </button>
+                    )}
+                  </h2>
+                )}
+              </div>
+              <div className="status-container">
+                {!isConnected && (
+                  <div className="reconnecting-badge">
+                    <span className="reconnecting-text">RECONNECTING</span>
+                    <span className="reconnecting-dots">...</span>
+                  </div>
+                )}
+              </div>
+            <header style={styles.header}>
+              <h2 style={styles.title}>{roomName || `Room ${roomId}`}</h2>
+              <div style={styles.statusContainer}>
+                {!isConnected && <span style={styles.warning}>Reconnecting...</span>}
+                <span
+                  style={{
+                    ...styles.gameStatus,
+                    color: gameState === 'waiting' ? '#FF9800' : gameState === 'submitting' ? '#4CAF50' : '#1976D6',
+                  }}
+                >
+                  {gameState.charAt(0).toUpperCase() + gameState.slice(1)}
+                </span>
+              </div>
+            </header>
+
+            {!gameStarted && (
+              <div style={styles.invite}>
+                <input style={styles.input} type="text" value={inviteLink} readOnly />
+                <button style={styles.button} onClick={() => navigator.clipboard.writeText(inviteLink)}>
+                  Copy Link
+                </button>
+              </div>
+            )}
+
+            {isCreator && !roomNameSet && gameState === 'waiting' && (
+              <div style={styles.section}>
+                <h3 style={styles.subtitle}>Set Room Name</h3>
+                <input
+                  style={styles.input}
+                  type="text"
+                  value={roomName}
+                  onChange={(e) => setRoomName(e.target.value)}
+                  placeholder="Enter room name"
+                  maxLength={20}
+                />
+                <button style={styles.button} onClick={setRoomNameHandler}>
+                  Set Room Name
+                </button>
+              </div>
+            )}
+
+            {!nameSet && gameState === 'waiting' && (
+              <div style={styles.section}>
+                <h3 style={styles.subtitle}>Set Your Name</h3>
+                <input
+                  style={styles.input}
+                  type="text"
+                  value={playerName}
+                  onChange={(e) => setPlayerName(e.target.value)}
+                  placeholder="Enter your name"
+                  maxLength={20}
+                />
+                <button style={styles.button} onClick={setName}>Set Name</button>
+              </div>
+            )}
+
+            <h3 style={styles.subtitle}>Players ({players.length}):</h3>
+            <ul style={styles.playerList}>
+              {players.map((player) => (
+                <li
+                  key={player.id}
+                  style={{
+                    ...styles.playerItem,
+                    backgroundColor: player.id === socket.id ? '#E3F2FD' : '#FFFFFF',
+                    fontStyle: player.isBot ? 'italic' : 'normal',
+                    borderLeft: player.id === (isCreator ? socket.id : players[0]?.id) ? '4px solid #1976D6' : 'none',
+                  }}
+                >
+                  {player.name || (player.isBot ? player.name : player.id)} - Score: {player.score}
                 </li>
               ))}
             </ul>
-          </div>
-          <div className="chat-input-container">
-            <input
-              className="main-input chat-input"
-              type="text"
-              value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
-              placeholder="Type a message..."
-              maxLength={100}
-              onKeyPress={(e) => e.key === 'Enter' && sendChatMessage()} />
-            <button className="button" onClick={sendChatMessage}>
-              Send
-            </button>
-          </div>
-        </div>
-        <p className="loading-message">Loading room...</p>
+
+            {gameState === 'waiting' && nameSet && (
+              <div style={styles.section}>
+                <p>Waiting for players... (Game starts with 2-4 players, bots added if needed)</p>
+                <button style={styles.button} onClick={startGame} disabled={!isCreator || isStarting}>
+                  {isStarting ? 'Starting...' : 'Start Game'}
+                </button>
+                {!isCreator && <p style={styles.note}>(Only the room creator can start the game)</p>}
+              </div>
+            )}
+
+   {gameStarted && (
+              <ScrabbleGame
+                roomId={roomId}
+                players={players}
+                isCreator={isCreator}
+                socket={socket}
+              />
+            )},
+            <PlayerList players={players} leaveRoom={leaveRoom} />
+                            <div className="container">
+              <h3 className="section-header">GAME CHAT</h3>
+              <div 
+                className="chat-list-wrapper" 
+                ref={chatContainerRef}
+                onScroll={checkIfNearBottom}
+              >
+                <ul className="chat-list" ref={chatListRef}>
+                  {chatMessages.map((msg, index) => (
+                    <li
+                      key={index}
+                      className={`chat-item ${msg.senderId === socket.id ? 'own-message' : ''}`}
+                    >
+                      <div className="pill chat-pill">
+                        {msg.senderName}
+                      </div>
+                      <div className="chat-message">{msg.message}</div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="chat-input-container">
+                <input
+                  className="main-input chat-input"
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Type a message..."
+                  maxLength={100}
+                  onKeyPress={(e) => e.key === 'Enter' && sendChatMessage()}
+                />
+                <button className="button" onClick={sendChatMessage}>
+                Send
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <p className="loading-message">Loading room...</p>
+        )}
       </div>
     </>
   );
-}
+};
 
 export default GameRoom;
