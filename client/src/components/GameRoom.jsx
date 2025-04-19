@@ -18,7 +18,6 @@ const GameRoom = () => {
   const [players, setPlayers] = useState([]);
   const [roundNum, setRoundNum] = useState(0);
   const [letterSet, setLetterSet] = useState([]);
-  const [acronym, setAcronym] = useState('');
   const [submissions, setSubmissions] = useState([]);
   const [gameState, setGameState] = useState('waiting');
   const [hasVoted, setHasVoted] = useState(false);
@@ -91,17 +90,6 @@ const GameRoom = () => {
       setResults(null);
     });
 
-    socket.on('submissionsReceived', (submissionList) => {
-      console.log('Submissions received:', submissionList);
-      setSubmissions(submissionList);
-      setGameState('voting');
-    });
-
-    socket.on('votingStart', () => {
-      console.log('Voting started');
-      setGameState('voting');
-    });
-
     socket.on('roundResults', (roundResults) => {
       console.log('Round results:', roundResults);
       setResults(roundResults);
@@ -140,7 +128,6 @@ const GameRoom = () => {
       socket.off('playerUpdate');
       socket.off('newRound');
       socket.off('submissionsReceived');
-      socket.off('votingStart');
       socket.off('roundResults');
       socket.off('gameEnd');
       socket.off('gameReset');
@@ -166,22 +153,6 @@ const GameRoom = () => {
     }, 500),
     [roomId, isCreator, players.length, isStarting]
   );
-
-  const submitAcronym = () => {
-    if (acronym && roomId) {
-      console.log('Submitting acronym:', acronym);
-      socket.emit('submitAcronym', { roomId, acronym });
-      setAcronym('');
-    }
-  };
-
-  const submitVote = (submissionId) => {
-    if (!hasVoted && roomId) {
-      console.log('Submitting vote for:', submissionId);
-      socket.emit('vote', { roomId, submissionId });
-      setHasVoted(true);
-    }
-  };
 
   const leaveRoom = () => {
     console.log('Leaving room:', roomId);
@@ -229,54 +200,6 @@ const GameRoom = () => {
                 {isStarting ? 'Starting...' : 'Start Game'}
               </button>
               {!isCreator && <p style={styles.note}>(Only the room creator can start the game)</p>}
-            </div>
-          )}
-
-          {gameState === 'submitting' && (
-            <div style={styles.section}>
-              <h3 style={styles.subtitle}>Round {roundNum} - Letters: {letterSet.join(', ')}</h3>
-              <input
-                style={styles.input}
-                type="text"
-                value={acronym}
-                onChange={(e) => setAcronym(e.target.value.toUpperCase())}
-                placeholder="Enter acronym"
-              />
-              <button style={styles.button} onClick={submitAcronym}>Submit</button>
-            </div>
-          )}
-
-          {gameState === 'voting' && (
-            <div style={styles.section}>
-              <h3 style={styles.subtitle}>Vote for an Acronym:</h3>
-              <ul style={styles.submissionList}>
-                {submissions.map(([playerId, acronym]) => (
-                  <li key={playerId} style={styles.submissionItem}>
-                    {acronym} -{' '}
-                    <button
-                      style={styles.voteButton}
-                      onClick={() => submitVote(playerId)}
-                      disabled={hasVoted}
-                    >
-                      Vote
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {gameState === 'results' && results && (
-            <div style={styles.section}>
-              <h3 style={styles.subtitle}>Round {roundNum} Results</h3>
-              <ul style={styles.submissionList}>
-                {results.submissions.map(([playerId, acronym]) => (
-                  <li key={playerId} style={styles.submissionItem}>
-                    {acronym} - Votes: {results.votes.filter(([_, votedId]) => votedId === playerId).length}
-                    {results.winnerIds.includes(playerId) && ' (Winner)'}
-                  </li>
-                ))}
-              </ul>
             </div>
           )}
 

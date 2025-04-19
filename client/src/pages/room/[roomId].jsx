@@ -25,7 +25,6 @@ function GameRoom() {
   const [roundNum, setRoundNum] = useState(0);
   const [letterSet, setLetterSet] = useState([]);
   const [category, setCategory] = useState('');
-  const [acronym, setAcronym] = useState('');
   const [submissions, setSubmissions] = useState([]);
   const [gameState, setGameState] = useState('waiting');
   const [hasVoted, setHasVoted] = useState(false);
@@ -124,10 +123,6 @@ function GameRoom() {
       setSubmissions(submissionList);
     });
 
-    socket.on('votingStart', () => {
-      setGameState('voting');
-    });
-
     socket.on('roundResults', (roundResults) => {
       setResults(roundResults);
       setPlayers(roundResults.updatedPlayers);
@@ -173,7 +168,6 @@ function GameRoom() {
       socket.off('newRound');
       socket.off('timeUpdate');
       socket.off('submissionsReceived');
-      socket.off('votingStart');
       socket.off('roundResults');
       socket.off('gameEnd');
       socket.off('gameReset');
@@ -186,15 +180,6 @@ function GameRoom() {
       chatListRef.current.scrollTop = chatListRef.current.scrollHeight;
     }
   }, [chatMessages]);
-
-  useEffect(() => {
-    if (gameState === 'voting' && hasVoted) {
-      const timeout = setTimeout(() => {
-        if (!results && roomId) socket.emit('requestResults', roomId);
-      }, 5000);
-      return () => clearTimeout(timeout);
-    }
-  }, [gameState, hasVoted, results, roomId]);
 
   const debounce = (func, delay) => {
     let timeout;

@@ -42,7 +42,7 @@ app.get('/', (req, res) => {
 });
 
 const rooms = new Map();
-
+/*
 const grokClient = new OpenAI({
   apiKey: process.env.XAI_API_KEY,
   baseURL: 'https://api.x.ai/v1',
@@ -63,20 +63,9 @@ async function callLLM(prompt) {
   } catch (error) {
     console.error('xAI API error:', error.message);
     throw error;
-  }
+  }*/
 }
 
-/*async function generateCategory() {
-  const prompt = 'Generate a single-word category for an acronym game (e.g., "Space", "Animals", "Tech"). Return only the word, no explanation.';
-  try {
-    const category = await callLLM(prompt);
-    return category;
-  } catch (error) {
-    console.error('Category generation error:', error);
-    return 'Random';
-  }
-}
-*/
 io.on('connection', (socket) => {
   console.debug('New client connected:', socket.id);
 
@@ -86,14 +75,7 @@ io.on('connection', (socket) => {
       name: `Room ${roomId}`, // Default name
       creatorId: socket.id,
       players: [{ id: socket.id, name: '', score: 0, isBot: false }],
-      round: 0,
-      letters: [],
-      submissions: new Map(),
-      votes: new Map(),
       started: false,
-      submissionTimer: null,
-      votingTimer: null,
-      category: '',
     });
     socket.join(roomId);
     socket.emit('roomCreated', roomId);
@@ -107,14 +89,7 @@ io.on('connection', (socket) => {
         name: `Room ${roomId}`,
         creatorId: null,
         players: [],
-        round: 0,
-        letters: [],
-        submissions: new Map(),
-        votes: new Map(),
         started: false,
-        submissionTimer: null,
-        votingTimer: null,
-        category: '',
       };
       rooms.set(roomId, room);
     }
@@ -278,30 +253,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('submitAcronym', ({ roomId, acronym }) => {
-    const room = rooms.get(roomId);
-    if (room && room.started) {
-      room.submissions.set(socket.id, acronym);
-      if (room.submissions.size === room.players.length) {
-        if (room.submissionTimer) clearInterval(room.submissionTimer);
-        startVoting(roomId);
-      }
-    }
-  });
-
-  socket.on('vote', ({ roomId, submissionId }) => {
-    const room = rooms.get(roomId);
-    if (room && room.started) {
-      if (!room.votes.has(socket.id)) {
-        room.votes.set(socket.id, submissionId);
-        if (room.votes.size === room.players.length) {
-          if (room.votingTimer) clearInterval(room.votingTimer);
-          endVoting(roomId);
-        }
-      }
-    }
-  });
-
   socket.on('requestResults', (roomId) => {
     const room = rooms.get(roomId);
     if (room && room.votes.size === room.players.length) {
@@ -394,139 +345,6 @@ async function startRound(roomId) {
   const category = await generateCategory();
   room.category = category;
   console.debug('Starting round', room.round, 'for room:', roomId, 'letters:', room.letters, 'category:', category);
-
-  room.submissions.clear();
-  room.votes.clear();
-
-  const letterCount = room.letters.length;
-  const timeLimit = letterCount <= 4 ? 30 : letterCount <= 6 ? 60 : 90;
-  let timeLeft = timeLimit;
-
-  io.to(roomId).emit('newRound', { roundNum: room.round, letterSet: room.letters, timeLeft, category });
-
-  /*for (const player of room.players) {
-    if (player.isBot) {
-      const prompt = `Generate a creative acronym phrase using the letters ${room.letters.join(', ')} for the category "${category}". Return only the phrase, no explanation.`;
-      try {
-        const acronym = await callLLM(prompt);
-        room.submissions.set(player.id, acronym);
-      } catch (error) {
-        room.submissions.set(player.id, room.letters.join(''));
-      }
-    }
-  }*/
-
-  room.submissionTimer = setInterval(() => {
-    timeLeft--;
-    io.to(roomId).emit('timeUpdate', { timeLeft });
-    if (timeLeft <= 0 || room.submissions.size === room.players.length) {
-      clearInterval(room.submissionTimer);
-      room.submissionTimer = null;
-      for (const player of room.players) {
-        if (!room.submissions.has(player.id)) room.submissions.set(player.id, '');
-      }
-      startVoting(roomId);
-    }
-  }, 1000);
-}
-
-function startVoting(roomId) {
-  const room = rooms.get(roomId);
-  io.to(roomId).emit('submissionsReceived', Array.from(room.submissions));
-  io.to(roomId).emit('votingStart');
-
-  const letterCount = room.letters.length;
-  const timeLimit = letterCount <= 4 ? 30 : letterCount <= 6 ? 60 : 90;
-  let timeLeft = timeLimit;
-
-  setTimeout(() => simulateBotVotes(roomId), 5000);
-
-  room.votingTimer = setInterval(() => {
-    timeLeft--;
-    io.to(roomId).emit('timeUpdate', { timeLeft });
-    if (timeLeft <= 0 || room.votes.size === room.players.length) {
-      clearInterval(room.votingTimer);
-      room.votingTimer = null;
-      endVoting(roomId);
-    }
-  }, 1000);
-}
-
-/*async function simulateBotVotes(roomId) {
-  const room = rooms.get(roomId);
-  if (room && room.votingTimer) {
-    const submissionList = Array.from(room.submissions).map(([id, acronym]) => ({
-      id,
-      acronym,
-      playerName: room.players.find(p => p.id === id)?.name || id
-    }));
-
-    for (const player of room.players) {
-      if (player.isBot && !room.votes.has(player.id)) {
-        const validOptions = submissionList.filter(s => s.id !== player.id);
-        if (validOptions.length > 0) {
-          const prompt = `Rate these acronyms for creativity, humor, and fit to the category "${room.category}": ${validOptions.map((s, i) => `${i + 1}. ${s.acronym}`).join(', ')}. Return the number (1-${validOptions.length}) of the one you like best.`;
-          try {
-            const llmResponse = await callLLM(prompt);
-            const choiceIndex = Math.min(parseInt(llmResponse) - 1 || 0, validOptions.length - 1);
-            const votedId = validOptions[choiceIndex].id;
-            room.votes.set(player.id, votedId);
-            if (room.votes.size === room.players.length) {
-              if (room.votingTimer) clearInterval(room.votingTimer);
-              endVoting(roomId);
-            }
-          } catch (error) {
-            const randomVote = validOptions[Math.floor(Math.random() * validOptions.length)].id;
-            room.votes.set(player.id, randomVote);
-            if (room.votes.size === room.players.length) {
-              if (room.votingTimer) clearInterval(room.votingTimer);
-              endVoting(roomId);
-            }
-          }
-        }
-      }
-    }
-  }
-}*/
-
-function endVoting(roomId) {
-  const room = rooms.get(roomId);
-  if (room) {
-    for (const player of room.players) {
-      if (!room.votes.has(player.id)) room.votes.set(player.id, '');
-    }
-    const results = calculateResults(room);
-    io.to(roomId).emit('roundResults', results);
-
-    if (room.round < 5) {
-      room.submissions.clear();
-      room.votes.clear();
-      startRound(roomId);
-    } else {
-      const winner = room.players.reduce((prev, curr) => prev.score > curr.score ? prev : curr);
-      io.to(roomId).emit('gameEnd', { winner });
-    }
-  }
-}
-
-function calculateResults(room) {
-  const voteCounts = new Map();
-  room.votes.forEach((votedId) => {
-    if (votedId) voteCounts.set(votedId, (voteCounts.get(votedId) || 0) + 1);
-  });
-
-  voteCounts.forEach((count, playerId) => {
-    const player = room.players.find(p => p.id === playerId);
-    if (player) player.score += count;
-  });
-
-  return {
-    submissions: Array.from(room.submissions),
-    votes: Array.from(room.votes),
-    updatedPlayers: room.players
-  };
-}
-
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
