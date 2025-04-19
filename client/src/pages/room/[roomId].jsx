@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import io from 'socket.io-client';
 import Head from 'next/head';
 import ScrabbleGame from '../../components/ScrabbleGame';
+import PlayerList from '../../components/PlayerList';
 
 
 const socket = io('https://acrophylia.onrender.com', {
@@ -14,12 +15,13 @@ const socket = io('https://acrophylia.onrender.com', {
   timeout: 30000,
 });
 
-const GameRoom = () => {
+function GameRoom() {
   const router = useRouter();
   const { roomId: urlRoomId, creatorId } = router.query;
   const [roomId, setRoomId] = useState(urlRoomId || null);
-  const [roomName, setRoomName] = useState(''); // Room name state
-  const [roomNameSet, setRoomNameSet] = useState(false); // Track if room name is set
+  const [roomName, setRoomName] = useState('');
+  const [roomNameSet, setRoomNameSet] = useState(false);
+  const [isEditingRoomName, setIsEditingRoomName] = useState(false);
   const [players, setPlayers] = useState([]);
   const [roundNum, setRoundNum] = useState(0);
   const [letterSet, setLetterSet] = useState([]);
@@ -265,21 +267,21 @@ const GameRoom = () => {
   };
 
   const inviteLink = roomId ? `${window.location.origin}/room/${roomId}` : '';
-  <meta name="description" content="Join a Scrabble game room and play with friends!" />
 
   return (
     <>
       <Head>
         <title>{`Scrabble - Room ${roomId || ''}`}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
- 
+        <meta name="description" content="Join a Scrabble game room and play with friends!" />
       </Head>
-       <div className="game-room-container">
+      
+      <div className="game-room-container">
         {roomId ? (
           <>
-           <header className="header">
+            <header className="header">
               <div className="room-title-container">
-                 {isEditingRoomName && isCreator && !roomNameSet && gameState === 'waiting' ? (
+                {isEditingRoomName && isCreator && !roomNameSet && gameState === 'waiting' ? (
                   <div className="room-name-edit">
                     <input
                       className="input"
@@ -321,100 +323,74 @@ const GameRoom = () => {
                     <span className="reconnecting-dots">...</span>
                   </div>
                 )}
-              </div>
-            <header style={styles.header}>
-              <h2 style={styles.title}>{roomName || `Room ${roomId}`}</h2>
-              <div style={styles.statusContainer}>
-                {!isConnected && <span style={styles.warning}>Reconnecting...</span>}
-                <span
-                  style={{
-                    ...styles.gameStatus,
-                    color: gameState === 'waiting' ? '#FF9800' : gameState === 'submitting' ? '#4CAF50' : '#1976D6',
-                  }}
-                >
+                <span className={`game-status ${gameState}`}>
                   {gameState.charAt(0).toUpperCase() + gameState.slice(1)}
                 </span>
               </div>
             </header>
 
             {!gameStarted && (
-              <div style={styles.invite}>
-                <input style={styles.input} type="text" value={inviteLink} readOnly />
-                <button style={styles.button} onClick={() => navigator.clipboard.writeText(inviteLink)}>
+              <div className="invite-section">
+                <input className="input" type="text" value={inviteLink} readOnly />
+                <button className="button" onClick={() => navigator.clipboard.writeText(inviteLink)}>
                   Copy Link
                 </button>
               </div>
             )}
 
-            {isCreator && !roomNameSet && gameState === 'waiting' && (
-              <div style={styles.section}>
-                <h3 style={styles.subtitle}>Set Room Name</h3>
-                <input
-                  style={styles.input}
-                  type="text"
-                  value={roomName}
-                  onChange={(e) => setRoomName(e.target.value)}
-                  placeholder="Enter room name"
-                  maxLength={20}
-                />
-                <button style={styles.button} onClick={setRoomNameHandler}>
-                  Set Room Name
-                </button>
-              </div>
-            )}
-
             {!nameSet && gameState === 'waiting' && (
-              <div style={styles.section}>
-                <h3 style={styles.subtitle}>Set Your Name</h3>
+              <div className="section">
+                <h3 className="subtitle">Set Your Name</h3>
                 <input
-                  style={styles.input}
+                  className="input"
                   type="text"
                   value={playerName}
                   onChange={(e) => setPlayerName(e.target.value)}
                   placeholder="Enter your name"
                   maxLength={20}
                 />
-                <button style={styles.button} onClick={setName}>Set Name</button>
+                <button className="button" onClick={setName}>Set Name</button>
               </div>
             )}
 
-            <h3 style={styles.subtitle}>Players ({players.length}):</h3>
-            <ul style={styles.playerList}>
-              {players.map((player) => (
-                <li
-                  key={player.id}
-                  style={{
-                    ...styles.playerItem,
-                    backgroundColor: player.id === socket.id ? '#E3F2FD' : '#FFFFFF',
-                    fontStyle: player.isBot ? 'italic' : 'normal',
-                    borderLeft: player.id === (isCreator ? socket.id : players[0]?.id) ? '4px solid #1976D6' : 'none',
-                  }}
-                >
-                  {player.name || (player.isBot ? player.name : player.id)} - Score: {player.score}
-                </li>
-              ))}
-            </ul>
+            <div className="players-section">
+              <h3 className="subtitle">Players ({players.length}):</h3>
+              <ul className="player-list">
+                {players.map((player) => (
+                  <li
+                    key={player.id}
+                    className={`player-item ${player.id === socket.id ? 'current-player' : ''} ${
+                      player.isBot ? 'bot-player' : ''
+                    } ${player.id === (isCreator ? socket.id : players[0]?.id) ? 'creator-player' : ''}`}
+                  >
+                    {player.name || (player.isBot ? player.name : player.id)} - Score: {player.score}
+                  </li>
+                ))}
+              </ul>
+            </div>
 
             {gameState === 'waiting' && nameSet && (
-              <div style={styles.section}>
+              <div className="section">
                 <p>Waiting for players... (Game starts with 2-4 players, bots added if needed)</p>
-                <button style={styles.button} onClick={startGame} disabled={!isCreator || isStarting}>
+                <button className="button" onClick={startGame} disabled={!isCreator || isStarting}>
                   {isStarting ? 'Starting...' : 'Start Game'}
                 </button>
-                {!isCreator && <p style={styles.note}>(Only the room creator can start the game)</p>}
+                {!isCreator && <p className="note">(Only the room creator can start the game)</p>}
               </div>
             )}
 
-   {gameStarted && (
+            {gameStarted && (
               <ScrabbleGame
                 roomId={roomId}
                 players={players}
                 isCreator={isCreator}
                 socket={socket}
               />
-            )},
+            )}
+            
             <PlayerList players={players} leaveRoom={leaveRoom} />
-                            <div className="container">
+            
+            <div className="container">
               <h3 className="section-header">GAME CHAT</h3>
               <div 
                 className="chat-list-wrapper" 
@@ -446,7 +422,7 @@ const GameRoom = () => {
                   onKeyPress={(e) => e.key === 'Enter' && sendChatMessage()}
                 />
                 <button className="button" onClick={sendChatMessage}>
-                Send
+                  Send
                 </button>
               </div>
             </div>
