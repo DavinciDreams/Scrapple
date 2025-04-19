@@ -22,14 +22,7 @@ function GameRoom() {
   const [roomNameSet, setRoomNameSet] = useState(false);
   const [isEditingRoomName, setIsEditingRoomName] = useState(false);
   const [players, setPlayers] = useState([]);
-  const [roundNum, setRoundNum] = useState(0);
-  const [letterSet, setLetterSet] = useState([]);
-  const [category, setCategory] = useState('');
-  const [submissions, setSubmissions] = useState([]);
   const [gameState, setGameState] = useState('waiting');
-  const [hasVoted, setHasVoted] = useState(false);
-  const [hasSubmitted, setHasSubmitted] = useState(false);
-  const [results, setResults] = useState(null);
   const [winner, setWinner] = useState(null);
   const [isCreator, setIsCreator] = useState(false);
   const [hasJoined, setHasJoined] = useState(false);
@@ -39,7 +32,6 @@ function GameRoom() {
   const [nameSet, setNameSet] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
-  const [timeLeft, setTimeLeft] = useState(null);
   const [gameStarted, setGameStarted] = useState(false);
   const chatListRef = useRef(null);
   const chatContainerRef = useRef(null);
@@ -77,7 +69,7 @@ function GameRoom() {
       setRoomId(roomId);
       setIsCreator(serverIsCreator);
       setRoomName(roomName);
-      setRoomNameSet(!!roomName && roomName !== `Room ${roomId}`); // Set if not default
+      setRoomNameSet(!!roomName && roomName !== `Room ${roomId}`);
       sessionStorage.setItem('isCreator', serverIsCreator);
     });
 
@@ -101,33 +93,7 @@ function GameRoom() {
 
     socket.on('gameStarted', () => {
       setGameStarted(true);
-    });
-
-    socket.on('newRound', ({ roundNum, letterSet, timeLeft: initialTime, category }) => {
-      setRoundNum(roundNum);
-      setLetterSet(letterSet);
-      setCategory(category);
-      setGameState('submitting');
-      setSubmissions([]);
-      setHasVoted(false);
-      setHasSubmitted(false);
-      setResults(null);
-      setTimeLeft(initialTime);
-    });
-
-    socket.on('timeUpdate', ({ timeLeft }) => {
-      setTimeLeft(timeLeft);
-    });
-
-    socket.on('submissionsReceived', (submissionList) => {
-      setSubmissions(submissionList);
-    });
-
-    socket.on('roundResults', (roundResults) => {
-      setResults(roundResults);
-      setPlayers(roundResults.updatedPlayers);
-      setGameState('results');
-      setTimeLeft(null);
+      setGameState('playing');
     });
 
     socket.on('gameEnd', ({ winner }) => {
@@ -136,18 +102,9 @@ function GameRoom() {
     });
 
     socket.on('gameReset', () => {
-      setRoundNum(0);
       setGameState('waiting');
-      setSubmissions([]);
-      setHasVoted(false);
-      setHasSubmitted(false);
-      setResults(null);
       setWinner(null);
-      setTimeLeft(null);
       setGameStarted(false);
-      setCategory('');
-      setGameState('playing');
-
     });
 
     socket.on('chatMessage', ({ senderId, senderName, message }) => {
@@ -165,10 +122,6 @@ function GameRoom() {
       socket.off('playerUpdate');
       socket.off('creatorUpdate');
       socket.off('gameStarted');
-      socket.off('newRound');
-      socket.off('timeUpdate');
-      socket.off('submissionsReceived');
-      socket.off('roundResults');
       socket.off('gameEnd');
       socket.off('gameReset');
       socket.off('chatMessage');
@@ -192,8 +145,7 @@ function GameRoom() {
   const startGame = useCallback(
     debounce(() => {
       if (roomId && isCreator && !isStarting) {
-        setIsStarting(true);
-        socket.emit('startGame', roomId);
+        setIsStarting(true);        socket.emit('startGame', { roomId, gameDuration: 30 }); // 30 minute game duration
         setTimeout(() => setIsStarting(false), 1000);
       }
     }, 500),
@@ -204,15 +156,6 @@ function GameRoom() {
     if (roomName.trim() && roomId && isCreator && !roomNameSet) {
       socket.emit('setRoomName', { roomId, roomName });
       setRoomNameSet(true);
-    }
-  };
-
-  const submitVote = (submissionId) => {
-    if (!hasVoted && roomId && submissionId !== socket.id) {
-      socket.emit('vote', { roomId, submissionId });
-      setHasVoted(true);
-    } else if (submissionId === socket.id) {
-      alert('You cannot vote for your own submission!');
     }
   };
 

@@ -2,11 +2,8 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const { OpenAI } = require('openai');
-const { generateLetters } = require('./utils/gameLogic');
-const { addBotPlayers } = require('./utils/botLogic');
 const { ScrabbleGame } = require('./utils/scrabbleLogic');
-
+const { addBotPlayers } = require('./utils/botLogic');
 
 require('dotenv').config();
 
@@ -16,11 +13,8 @@ const server = http.createServer(app);
 const allowedOrigins = [
   "http://localhost:3000",
   "https://urban-succotash-p9rqv5qxxg5cr4v4-3000.app.github.dev",
-  "https://acrophylia-5sij2fzvc-davincidreams-projects.vercel.app",
   "https://acrophylia.vercel.app",
-  "https://*.vercel.app",
-  "https://acrophylia-plum.vercel.app"
-
+  "https://*.vercel.app"
 ];
 
 app.use(cors({
@@ -38,48 +32,33 @@ const io = new Server(server, {
 });
 
 app.get('/', (req, res) => {
-  res.send('Acrophobia Game Server is running. Connect via the frontend.');
+  res.send('Scrabble Game Server is running. Connect via the frontend.');
 });
 
 const rooms = new Map();
-/*
-const grokClient = new OpenAI({
-  apiKey: process.env.XAI_API_KEY,
-  baseURL: 'https://api.x.ai/v1',
-});
-
-async function callLLM(prompt) {
-  try {
-    const response = await grokClient.chat.completions.create({
-      model: 'grok-3-mini',
-      messages: [
-        { role: 'system', content: 'You are a creative assistant helping generate acronyms or rate them.' },
-        { role: 'user', content: prompt }
-      ],
-      max_tokens: 100,
-      temperature: 0.7,
-    });
-    return response.choices[0].message.content.trim();
-  } catch (error) {
-    console.error('xAI API error:', error.message);
-    throw error;
-  }*/
-}
 
 io.on('connection', (socket) => {
   console.debug('New client connected:', socket.id);
 
-  socket.on('createRoom', () => { // Removed roomName parameter
+  socket.on('createRoom', () => {
     const roomId = Math.random().toString(36).substr(2, 9);
     rooms.set(roomId, {
-      name: `Room ${roomId}`, // Default name
+      name: `Room ${roomId}`,
       creatorId: socket.id,
       players: [{ id: socket.id, name: '', score: 0, isBot: false }],
       started: false,
+      game: null,
+      gameTimer: null,
+      gameDuration: null,
+      gameStartTime: null
     });
+    
     socket.join(roomId);
     socket.emit('roomCreated', roomId);
-    io.to(roomId).emit('playerUpdate', { players: rooms.get(roomId).players, roomName: rooms.get(roomId).name });
+    io.to(roomId).emit('playerUpdate', { 
+      players: rooms.get(roomId).players, 
+      roomName: rooms.get(roomId).name 
+    });
   });
 
   socket.on('joinRoom', ({ roomId, creatorId }) => {
@@ -132,7 +111,7 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('playerUpdate', { players: room.players, roomName: room.name });
   });
 
-    socket.on('setRoomName', ({ roomId, roomName }) => {
+  socket.on('setRoomName', ({ roomId, roomName }) => {
     const room = rooms.get(roomId);
     if (room && socket.id === room.creatorId && !room.started) {
       room.name = roomName.trim().substring(0, 20); // Sanitize and limit length
@@ -149,20 +128,41 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('playerUpdate', { players: room.players, roomName: room.name });
       }
     }
-  });  socket.on('startGame', ({ roomId, gameDuration }) => {
+  });
+  socket.on('startGame', ({ roomId, gameDuration }) => {
     const room = rooms.get(roomId);
     if (room && socket.id === room.creatorId && !room.started) {
       room.started = true;
       room.gameDuration = gameDuration * 60; // Convert minutes to seconds
       room.gameStartTime = Date.now();
       room.game = new ScrabbleGame(); // Initialize new game
-      startGame(roomId);
+
+      // Add players and send initial tiles
       room.players.forEach(player => {
         const tiles = room.game.addPlayer(player.id);
         io.to(player.id).emit('tileUpdate', { newTiles: tiles });
       });
+
+      // Initialize game timer
+      const startTime = Date.now();
+      room.gameTimer = setInterval(() => {
+        const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+        const remainingSeconds = room.gameDuration - elapsedSeconds;
+        
+        if (remainingSeconds <= 0) {
+          clearInterval(room.gameTimer);
+          const winner = room.players.reduce((prev, curr) => prev.score > curr.score ? prev : curr);
+          io.to(roomId).emit('gameEnd', { winner });
+          room.started = false;
+        } else {
+          io.to(roomId).emit('timeUpdate', { timeLeft: remainingSeconds });
+        }
+      }, 1000);
+
+      // Notify clients that game has started
       io.to(roomId).emit('gameStarted');
       io.to(roomId).emit('turnUpdate', { currentPlayer: room.game.currentTurn });
+      io.to(roomId).emit('playerUpdate', { players: room.players, roomName: room.name });
       io.to(roomId).emit('boardUpdate', {
         board: room.game.board,
         lastMove: null
@@ -253,14 +253,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('requestResults', (roomId) => {
-    const room = rooms.get(roomId);
-    if (room && room.votes.size === room.players.length) {
-      const results = calculateResults(room);
-      socket.emit('roundResults', results);
-    }
-  });
-
   socket.on('sendMessage', ({ roomId, message }) => {
     const room = rooms.get(roomId);
     if (room) {
@@ -334,19 +326,9 @@ async function startGame(roomId) {
   io.to(roomId).emit('playerUpdate', { players: room.players, roomName: room.name });
   room.started = true;
   io.to(roomId).emit('gameStarted');
-  await startRound(roomId);
 }
-
-async function startRound(roomId) {
-  const room = rooms.get(roomId);
-  room.round++;
-  
-  room.letters = generateLetters(room.round);
-  const category = await generateCategory();
-  room.category = category;
-  console.debug('Starting round', room.round, 'for room:', roomId, 'letters:', room.letters, 'category:', category);
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} - v1.0 with custom room name UI`);
+  console.log(`Server running on port ${PORT} - v1.0`);
 });
