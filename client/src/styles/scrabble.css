@@ -156,3 +156,56 @@
     from { opacity: 0; transform: translate(-50%, -10px); }
     to { opacity: 1; transform: translate(-50%, 0); }
 }
+
+.timer {
+  background-color: #4A5568;
+  color: white;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 1.2em;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.game-settings {
+  margin: 16px 0;
+  padding: 16px;
+  background-color: #F7FAFC;
+  border-radius: 8px;
+  border: 1px solid #E2E8F0;
+}
+
+.game-settings label {
+  font-weight: 600;
+  margin-right: 12px;
+}
+
+.select-input {
+  padding: 8px 12px;
+  border: 1px solid #CBD5E0;
+  border-radius: 4px;
+  background-color: white;
+  font-size: 1em;
+  min-width: 120px;
+  cursor: pointer;
+}
+
+.select-input:focus {
+  outline: none;
+  border-color: #4299E1;
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.1);
+}
+
+.timer.warning {
+  background-color: #ED8936;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.8; }
+  100% { opacity: 1; }
+}

@@ -174,14 +174,15 @@ io.on('connection', (socket) => {
         io.to(roomId).emit('playerUpdate', { players: room.players, roomName: room.name });
       }
     }
-  });
-
-  socket.on('startGame', (roomId) => {
+  });  socket.on('startGame', ({ roomId, gameDuration }) => {
     const room = rooms.get(roomId);
     if (room && socket.id === room.creatorId && !room.started) {
       room.started = true;
+      room.gameDuration = gameDuration * 60; // Convert minutes to seconds
+      room.gameStartTime = Date.now();
+      room.game = new ScrabbleGame(); // Initialize new game
       startGame(roomId);
-   room.players.forEach(player => {
+      room.players.forEach(player => {
         const tiles = room.game.addPlayer(player.id);
         io.to(player.id).emit('tileUpdate', { newTiles: tiles });
       });
@@ -261,16 +262,16 @@ io.on('connection', (socket) => {
   socket.on('resetGame', (roomId) => {
     const room = rooms.get(roomId);
     if (room && socket.id === room.creatorId) {
-            room.game = new ScrabbleGame();
+      room.game = new ScrabbleGame();
+      
+      // Clear all timers
+      if (room.gameTimer) clearInterval(room.gameTimer);
+      room.gameTimer = null;
+      room.gameDuration = null;
+      room.gameStartTime = null;
 
-      if (room.submissionTimer) clearInterval(room.submissionTimer);
-      if (room.votingTimer) clearInterval(room.votingTimer);
-      room.round = 0;
-      room.letters = [];
-      room.submissions.clear();
-      room.votes.clear();
+      // Reset game state
       room.started = false;
-      room.category = '';
       room.players.forEach(player => { player.score = 0 });
       io.to(roomId).emit('playerUpdate', { players: room.players, roomName: room.name });
       io.to(roomId).emit('gameReset');
@@ -362,6 +363,23 @@ async function startGame(roomId) {
       message: `${newBot.name} has joined the chat!`
     });
   }
+
+  // Initialize game timer
+  const startTime = Date.now();
+  room.gameTimer = setInterval(() => {
+    const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+    const remainingSeconds = room.gameDuration - elapsedSeconds;
+    
+    if (remainingSeconds <= 0) {
+      clearInterval(room.gameTimer);
+      const winner = room.players.reduce((prev, curr) => prev.score > curr.score ? prev : curr);
+      io.to(roomId).emit('gameEnd', { winner });
+      room.started = false;
+    } else {
+      io.to(roomId).emit('timeUpdate', { timeLeft: remainingSeconds });
+    }
+  }, 1000);
+
   io.to(roomId).emit('playerUpdate', { players: room.players, roomName: room.name });
   room.started = true;
   io.to(roomId).emit('gameStarted');

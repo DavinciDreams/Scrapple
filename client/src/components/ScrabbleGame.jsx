@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import ScrabbleBoard from './ScrabbleBoard';
-import { useSocket } from '../lib/socket';
 
 const tileBag = [
   { letter: 'A', score: 1, count: 9 }, { letter: 'B', score: 3, count: 2 },
@@ -19,8 +18,7 @@ const tileBag = [
   { letter: '*', score: 0, count: 2 }
 ];
 
-const ScrabbleGame = ({ roomId, players, isCreator }) => {
-  const socket = useSocket();
+const ScrabbleGame = ({ roomId, players, isCreator, socket }) => {
   const [board, setBoard] = useState(Array(15).fill().map(() => Array(15).fill(null)));
   const [playerTiles, setPlayerTiles] = useState([]);
   const [selectedTile, setSelectedTile] = useState(null);
@@ -28,17 +26,30 @@ const ScrabbleGame = ({ roomId, players, isCreator }) => {
   const [isMyTurn, setIsMyTurn] = useState(false);
   const [gameState, setGameState] = useState('waiting');
   const [validationError, setValidationError] = useState(null);
+  const [score, setScore] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(null);
 
   useEffect(() => {
     if (!socket) return;
 
-    socket.on('gameStarted', ({ initialTiles }) => {
-      setPlayerTiles(initialTiles);
-      setGameState('playing');
+    socket.on('timeUpdate', ({ timeLeft }) => {
+      setTimeLeft(timeLeft);
     });
 
-    socket.on('turnUpdate', ({ currentPlayer }) => {
+    socket.on('gameStarted', ({ initialTiles, firstPlayer }) => {
+      setPlayerTiles(initialTiles);
+      setGameState('playing');
+      setIsMyTurn(firstPlayer === socket.id);
+      setBoard(Array(15).fill().map(() => Array(15).fill(null)));
+      setPlacedTiles([]);
+      setScore(0);
+    });
+
+    socket.on('turnUpdate', ({ currentPlayer, board: newBoard }) => {
       setIsMyTurn(currentPlayer === socket.id);
+      if (newBoard) {
+        setBoard(newBoard);
+      }
     });
 
     socket.on('boardUpdate', ({ newBoard, lastPlacedTiles }) => {
@@ -56,6 +67,7 @@ const ScrabbleGame = ({ roomId, players, isCreator }) => {
     });
 
     return () => {
+      socket.off('timeUpdate');
       socket.off('gameStarted');
       socket.off('turnUpdate');
       socket.off('boardUpdate');
@@ -119,13 +131,47 @@ const ScrabbleGame = ({ roomId, players, isCreator }) => {
     setPlayerTiles([...playerTiles, ...returnedTiles]);
   };
 
+  const exchangeTiles = (selectedTileIndices) => {
+    if (!isMyTurn || placedTiles.length > 0) return;
+    
+    const tilesToExchange = selectedTileIndices.map(index => playerTiles[index]);
+    socket.emit('exchangeTiles', { roomId, tiles: tilesToExchange });
+    setSelectedTile(null);
+  };
+
+  const drawTiles = () => {
+    if (playerTiles.length >= 7) return;
+    const numTilesToDraw = 7 - playerTiles.length;
+    socket.emit('drawTiles', { roomId, numTiles: numTilesToDraw });
+  };
+
+  const formatTime = (seconds) => {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  };
+
+  const isTimeRunningLow = (seconds) => {
+    return seconds <= 300; // 5 minutes or less
+  };
+
   return (
-    <div className="scrabble-container">
+    <div className="scrabble-game">
       {validationError && (
-        <div className="error-message">
-          {validationError}
-        </div>
+        <div className="error-message">{validationError}</div>
       )}
+      <div className="game-info">
+        <div className="score">Score: {score}</div>
+        {timeLeft && (
+          <div className={`timer ${isTimeRunningLow(timeLeft) ? 'warning' : ''}`}>
+            Time Left: {formatTime(timeLeft)}
+          </div>
+        )}
+        <div className="turn-indicator">
+          {isMyTurn ? "Your Turn!" : "Waiting for opponent..."}
+        </div>
+      </div>
+      
       <ScrabbleBoard
         board={board}
         onPlaceTile={handlePlaceTile}
@@ -136,36 +182,43 @@ const ScrabbleGame = ({ roomId, players, isCreator }) => {
         {playerTiles.map((tile, index) => (
           <div
             key={index}
-            className={`player-tile ${selectedTile === index ? 'selected' : ''}`}
+            className={`tile ${selectedTile === index ? 'selected' : ''}`}
             onClick={() => handleTileSelect(index)}
           >
-            <span className="tile-letter">{tile.letter}</span>
-            <span className="tile-score">{tile.score}</span>
+            <span className="letter">{tile.letter}</span>
+            <span className="score">{tile.score}</span>
           </div>
         ))}
       </div>
-
-      <div className="scrabble-controls">
+      
+      <div className="game-controls">
         <button 
-          className="scrabble-button"
+          className="control-button"
           onClick={shuffleTiles}
           disabled={!isMyTurn}
         >
           Shuffle
         </button>
         <button
-          className="scrabble-button"
+          className="control-button"
           onClick={resetMove}
           disabled={!isMyTurn || placedTiles.length === 0}
         >
           Reset
         </button>
         <button
-          className="scrabble-button"
+          className="control-button"
+          onClick={() => exchangeTiles([selectedTile])}
+          disabled={!isMyTurn || selectedTile === null}
+        >
+          Exchange
+        </button>
+        <button
+          className="control-button primary"
           onClick={submitMove}
           disabled={!isMyTurn || placedTiles.length === 0}
         >
-          Submit
+          Submit Word
         </button>
       </div>
     </div>
