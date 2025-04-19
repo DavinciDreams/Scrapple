@@ -211,13 +211,13 @@ const GameRoom = () => {
     }
   };
 
-  const submitAcronym = () => {
+ /* const submitAcronym = () => {
     if (acronym && roomId && !hasSubmitted) {
       socket.emit('submitAcronym', { roomId, acronym });
       setHasSubmitted(true);
       setAcronym('');
     }
-  };
+  };<style>{`
 
   const submitVote = (submissionId) => {
     if (!hasVoted && roomId && submissionId !== socket.id) {
@@ -227,7 +227,7 @@ const GameRoom = () => {
       alert('You cannot vote for your own submission!');
     }
   };
-
+*/
   const leaveRoom = () => {
     if (roomId) {
       socket.emit('leaveRoom', roomId);
@@ -265,32 +265,63 @@ const GameRoom = () => {
   };
 
   const inviteLink = roomId ? `${window.location.origin}/room/${roomId}` : '';
+  <meta name="description" content="Join a Scrabble game room and play with friends!" />
 
   return (
     <>
       <Head>
         <title>{`Scrabble - Room ${roomId || ''}`}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta name="description" content="Join a Scrabble game room and play with friends!" />
-        <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet" />
-        <style>{`
-          @media (max-width: 480px) {
-            .container { padding: 0.5rem; }
-            .title { font-size: 1.5rem; }
-            .subtitle { font-size: 1.25rem; }
-            .input { padding: 0.5rem; }
-            .button { padding: 0.5rem 1rem; max-width: 150px; }
-          }
-          @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-          }
-        `}</style>
+ 
       </Head>
-      <div style={styles.container}>
+       <div className="game-room-container">
         {roomId ? (
           <>
+           <header className="header">
+              <div className="room-title-container">
+                 {isEditingRoomName && isCreator && !roomNameSet && gameState === 'waiting' ? (
+                  <div className="room-name-edit">
+                    <input
+                      className="input"
+                      type="text"
+                      value={roomName}
+                      onChange={(e) => setRoomName(e.target.value)}
+                      placeholder="Enter room name"
+                      maxLength={20}
+                      onKeyPress={(e) => e.key === 'Enter' && setRoomNameHandler()}
+                    />
+                    <button className="button" onClick={setRoomNameHandler}>
+                      Save
+                    </button>
+                    <button
+                      className="button"
+                      onClick={() => setIsEditingRoomName(false)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <h2 className="title">
+                    {roomName || `Room ${roomId}`}
+                    {isCreator && !roomNameSet && gameState === 'waiting' && (
+                      <button
+                        onClick={() => setIsEditingRoomName(true)}
+                        aria-label="Edit Room Name"
+                      >
+                        ✏️
+                      </button>
+                    )}
+                  </h2>
+                )}
+              </div>
+              <div className="status-container">
+                {!isConnected && (
+                  <div className="reconnecting-badge">
+                    <span className="reconnecting-text">RECONNECTING</span>
+                    <span className="reconnecting-dots">...</span>
+                  </div>
+                )}
+              </div>
             <header style={styles.header}>
               <h2 style={styles.title}>{roomName || `Room ${roomId}`}</h2>
               <div style={styles.statusContainer}>
@@ -374,353 +405,58 @@ const GameRoom = () => {
               </div>
             )}
 
-            {gameState === 'submitting' && (
-              <div style={styles.section}>
-                <h3 style={styles.subtitle}>
-                  Round {roundNum} of 5 - Category: <span style={styles.category}>{category}</span> - Letters:{' '}
-                  {letterSet.join(', ')}
-                </h3>
-                <p
-                  style={{
-                    ...styles.timer,
-                    color: timeLeft <= 10 ? '#D32F2F' : '#757575',
-                    animation: timeLeft <= 10 ? 'pulse 1s infinite' : 'none',
-                  }}
-                >
-                  Time Left: {timeLeft !== null ? `${timeLeft}s` : 'Waiting...'}
-                </p>
+   {gameStarted && (
+              <ScrabbleGame
+                roomId={roomId}
+                players={players}
+                isCreator={isCreator}
+                socket={socket}
+              />
+            )},
+            <PlayerList players={players} leaveRoom={leaveRoom} />
+                            <div className="container">
+              <h3 className="section-header">GAME CHAT</h3>
+              <div 
+                className="chat-list-wrapper" 
+                ref={chatContainerRef}
+                onScroll={checkIfNearBottom}
+              >
+                <ul className="chat-list" ref={chatListRef}>
+                  {chatMessages.map((msg, index) => (
+                    <li
+                      key={index}
+                      className={`chat-item ${msg.senderId === socket.id ? 'own-message' : ''}`}
+                    >
+                      <div className="pill chat-pill">
+                        {msg.senderName}
+                      </div>
+                      <div className="chat-message">{msg.message}</div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="chat-input-container">
                 <input
-                  style={styles.input}
+                  className="main-input chat-input"
                   type="text"
-                  value={acronym}
-                  onChange={(e) => setAcronym(e.target.value)}
-                  placeholder="Enter acronym"
-                  disabled={hasSubmitted || timeLeft === 0}
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Type a message..."
+                  maxLength={100}
+                  onKeyPress={(e) => e.key === 'Enter' && sendChatMessage()}
                 />
-                <button style={styles.button} onClick={submitAcronym} disabled={hasSubmitted || timeLeft === 0}>
-                  Submit
+                <button className="button" onClick={sendChatMessage}>
+                Send
                 </button>
               </div>
-            )}
-
-            {gameState === 'voting' && (
-              <div style={styles.section}>
-                <h3 style={styles.subtitle}>Vote for an Acronym:</h3>
-                <p
-                  style={{
-                    ...styles.timer,
-                    color: timeLeft <= 10 ? '#D32F2F' : '#757575',
-                    animation: timeLeft <= 10 ? 'pulse 1s infinite' : 'none',
-                  }}
-                >
-                  Time Left: {timeLeft !== null ? `${timeLeft}s` : 'Waiting...'}
-                </p>
-                <ul style={styles.submissionList}>
-                  {submissions.map(([playerId, acronym]) => (
-                    <li key={playerId} style={styles.submissionItem}>
-                      {acronym || '(No submission)'} -{' '}
-                      <button
-                        style={styles.voteButton}
-                        onClick={() => submitVote(playerId)}
-                        disabled={hasVoted || playerId === socket.id || timeLeft === 0}
-                      >
-                        Vote
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {gameState === 'results' && results && (
-              <div style={styles.section}>
-                <h3 style={styles.subtitle}>Round {roundNum} Results</h3>
-                <ul style={styles.submissionList}>
-                  {results.submissions.map(([playerId, acronym]) => {
-                    const voteCount = (results.votes || []).filter(([_, votedId]) => votedId === playerId).length || 0;
-                    const player = players.find(p => p.id === playerId);
-                    return (
-                      <li key={playerId} style={styles.submissionItem}>
-                        {acronym || '(No submission)'} by{' '}
-                        {player?.name || (player?.isBot ? player.name : playerId)} - Votes: {voteCount}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            )}
-
-            {gameState === 'ended' && winner && (
-              <div style={styles.section}>
-                <h3 style={styles.subtitle}>Game Over!</h3>
-                <p>
-                  Winner: {winner.name || winner.id} with {winner.score} points
-                </p>
-                {isCreator && (
-                  <button style={styles.button} onClick={resetGame}>
-                    New Game
-                  </button>
-                )}
-              </div>
-            )}
-
-            <button style={styles.leaveButton} onClick={leaveRoom}>
-              Leave Room
-            </button>
-
-            {gameStarted && (
-              <div style={styles.chatContainer}>
-                <h3 style={styles.subtitle}>Chat</h3>
-                <ul style={styles.chatList} ref={chatListRef}>
-                  {chatMessages.map((msg, index) => (
-                    <li key={index} style={styles.chatItem}>
-                      <strong style={{ color: msg.senderId === socket.id ? '#1976D6' : '#757575' }}>
-                        {msg.senderName}:
-                      </strong>{' '}
-                      {msg.message}
-                    </li>
-                  ))}
-                </ul>
-                <div style={styles.chatInputContainer}>
-                  <input
-                    style={styles.input}
-                    type="text"
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    placeholder="Type a message..."
-                    maxLength={100}
-                  />
-                  <button style={styles.button} onClick={sendChatMessage}>
-                    Send
-                  </button>
-                </div>
-              </div>
-            )}
+            </div>
           </>
         ) : (
-          <p style={styles.loading}>Loading room...</p>
+          <p className="loading-message">Loading room...</p>
         )}
       </div>
     </>
   );
-};
-
-const styles = {
-  container: {
-    padding: '1rem',
-    backgroundColor: '#FFFFFF',
-    minHeight: '100vh',
-    fontFamily: "'Roboto', sans-serif",
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    textAlign: 'center',
-    maxWidth: '480px',
-    margin: '0 auto',
-    color: '#212121',
-    gap: '1rem',
-    fontSize: 'calc(14px + 0.5vw)',
-  },
-  header: {
-    position: 'sticky',
-    top: 0,
-    backgroundColor: '#F5F5F5',
-    padding: '1rem',
-    width: '100%',
-    maxWidth: '480px',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    zIndex: 10,
-  },
-  statusContainer: {
-    display: 'flex',
-    gap: '0.5rem',
-    alignItems: 'center',
-  },
-  gameStatus: {
-    fontSize: '0.9rem',
-    fontWeight: '500',
-    padding: '0.25rem 0.5rem',
-    borderRadius: '12px',
-    backgroundColor: '#E0E0E0',
-  },
-  warning: {
-    color: '#D32F2F',
-    fontSize: '0.9rem',
-    fontWeight: '500',
-  },
-  title: {
-    fontSize: '1.75rem',
-    color: '#1976D6',
-    margin: 0,
-    fontWeight: '500',
-  },
-  subtitle: {
-    fontSize: '1.5rem',
-    color: '#212121',
-    marginBottom: '1rem',
-    fontWeight: '500',
-  },
-  category: {
-    fontWeight: '700',
-    color: '#F57C00',
-  },
-  timer: {
-    fontSize: '1rem',
-    marginBottom: '0.75rem',
-  },
-  invite: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.75rem',
-    marginBottom: '1rem',
-    width: '100%',
-  },
-  input: {
-    padding: '0.75rem',
-    fontSize: '1rem',
-    border: '1px solid #B0BEC5',
-    borderRadius: '4px',
-    width: '100%',
-    boxSizing: 'border-box',
-    backgroundColor: '#FAFAFA',
-    color: '#212121',
-    boxShadow: '0 1px 2px rgba(0,0,0,0.1)',
-    transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
-  },
-  button: {
-    padding: '0.75rem 1.5rem',
-    fontSize: '1rem',
-    backgroundColor: '#1976D6',
-    color: '#FFFFFF',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    width: '100%',
-    maxWidth: '180px',
-    margin: '0.5rem auto',
-    fontWeight: '500',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    transition: 'background-color 0.2s ease, transform 0.1s ease',
-  },
-  voteButton: {
-    padding: '0.5rem 1rem',
-    fontSize: '0.9rem',
-    backgroundColor: '#4CAF50',
-    color: '#FFFFFF',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    transition: 'background-color 0.2s ease, transform 0.1s ease',
-  },
-  leaveButton: {
-    padding: '0.75rem 1.5rem',
-    fontSize: '1rem',
-    backgroundColor: '#D32F2F',
-    color: '#FFFFFF',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    width: '100%',
-    maxWidth: '180px',
-    margin: '2rem auto 0',
-    fontWeight: '500',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    transition: 'background-color 0.2s ease, transform 0.1s ease',
-  },
-  playerList: {
-    listStyle: 'none',
-    padding: 0,
-    marginBottom: '1rem',
-    width: '100%',
-  },
-  playerItem: {
-    padding: '0.75rem',
-    marginBottom: '0.75rem',
-    borderRadius: '4px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)',
-    textAlign: 'center',
-    color: '#212121',
-    transition: 'box-shadow 0.2s ease',
-  },
-  submissionList: {
-    listStyle: 'none',
-    padding: 0,
-    width: '100%',
-  },
-  submissionItem: {
-    padding: '0.75rem',
-    backgroundColor: '#FFFFFF',
-    marginBottom: '0.75rem',
-    borderRadius: '4px',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    maxWidth: '320px',
-    marginLeft: 'auto',
-    marginRight: 'auto',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)',
-    color: '#212121',
-    transition: 'box-shadow 0.2s ease',
-  },
-  section: {
-    marginBottom: '1rem',
-    width: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    padding: '1rem',
-    borderRadius: '8px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)',
-    borderTop: '1px solid #E0E0E0',
-  },
-  note: {
-    color: '#757575',
-    fontSize: '0.9rem',
-    marginTop: '0.75rem',
-  },
-  loading: {
-    fontSize: '1.25rem',
-    textAlign: 'center',
-    marginTop: '20vh',
-    color: '#212121',
-  },
-  chatContainer: {
-    marginTop: '1rem',
-    width: '100%',
-    backgroundColor: '#FFFFFF',
-    padding: '1rem',
-    borderRadius: '8px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)',
-  },
-  chatList: {
-    listStyle: 'none',
-    padding: '0.5rem',
-    maxHeight: '200px',
-    overflowY: 'auto',
-    marginBottom: '1rem',
-    width: '100%',
-    backgroundColor: '#FAFAFA',
-    borderRadius: '4px',
-  },
-  chatItem: {
-    padding: '0.5rem',
-    marginBottom: '0.5rem',
-    borderRadius: '4px',
-    textAlign: 'left',
-    color: '#212121',
-    wordBreak: 'break-word',
-  },
-  chatInputContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.75rem',
-    width: '100%',
-  },
 };
 
 export default GameRoom;
