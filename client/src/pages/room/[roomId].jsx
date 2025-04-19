@@ -5,7 +5,6 @@ import Head from 'next/head';
 import ScrabbleGame from '../../components/ScrabbleGame';
 import PlayerList from '../../components/PlayerList';
 
-
 const socket = io('https://acrophylia.onrender.com', {
   withCredentials: true,
   transports: ['polling', 'websocket'],
@@ -44,7 +43,17 @@ function GameRoom() {
   const [timeLeft, setTimeLeft] = useState(null);
   const [gameStarted, setGameStarted] = useState(false);
   const chatListRef = useRef(null);
-  
+  const chatContainerRef = useRef(null);
+
+  const checkIfNearBottom = () => {
+    if (chatContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = chatContainerRef.current;
+      const isNearBottom = scrollHeight - (scrollTop + clientHeight) < 100;
+      if (isNearBottom && chatListRef.current) {
+        chatListRef.current.scrollTop = chatListRef.current.scrollHeight;
+      }
+    }
+  };
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -213,14 +222,6 @@ function GameRoom() {
     }
   };
 
- /* const submitAcronym = () => {
-    if (acronym && roomId && !hasSubmitted) {
-      socket.emit('submitAcronym', { roomId, acronym });
-      setHasSubmitted(true);
-      setAcronym('');
-    }
-  };<style>{`
-
   const submitVote = (submissionId) => {
     if (!hasVoted && roomId && submissionId !== socket.id) {
       socket.emit('vote', { roomId, submissionId });
@@ -229,7 +230,7 @@ function GameRoom() {
       alert('You cannot vote for your own submission!');
     }
   };
-*/
+
   const leaveRoom = () => {
     if (roomId) {
       socket.emit('leaveRoom', roomId);
@@ -261,7 +262,7 @@ function GameRoom() {
 
   const sendChatMessage = () => {
     if (chatInput.trim() && roomId) {
-      socket.emit('sendMessage', { roomId, message: chatInput });
+      socket.emit('sendMessage', { roomId: urlRoomId, message: chatInput });
       setChatInput('');
     }
   };
@@ -336,9 +337,7 @@ function GameRoom() {
                   Copy Link
                 </button>
               </div>
-            )}
-
-            {!nameSet && gameState === 'waiting' && (
+            )}            {!nameSet && gameState === 'waiting' && (
               <div className="section">
                 <h3 className="subtitle">Set Your Name</h3>
                 <input
@@ -353,29 +352,20 @@ function GameRoom() {
               </div>
             )}
 
-            <div className="players-section">
-              <h3 className="subtitle">Players ({players.length}):</h3>
-              <ul className="player-list">
-                {players.map((player) => (
-                  <li
-                    key={player.id}
-                    className={`player-item ${player.id === socket.id ? 'current-player' : ''} ${
-                      player.isBot ? 'bot-player' : ''
-                    } ${player.id === (isCreator ? socket.id : players[0]?.id) ? 'creator-player' : ''}`}
-                  >
-                    {player.name || (player.isBot ? player.name : player.id)} - Score: {player.score}
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {gameState === 'waiting' && nameSet && (
+            {nameSet && gameState === 'waiting' && !gameStarted && (
               <div className="section">
-                <p>Waiting for players... (Game starts with 2-4 players, bots added if needed)</p>
-                <button className="button" onClick={startGame} disabled={!isCreator || isStarting}>
-                  {isStarting ? 'Starting...' : 'Start Game'}
-                </button>
-                {!isCreator && <p className="note">(Only the room creator can start the game)</p>}
+                <p>Waiting for players... (Game starts with 2-4 players)</p>
+                {isCreator ? (
+                  <button 
+                    className="button primary"
+                    onClick={startGame}
+                    disabled={isStarting || players.length < 2}
+                  >
+                    {isStarting ? 'Starting...' : 'Start Game'}
+                  </button>
+                ) : (
+                  <p className="note">Waiting for the room creator to start the game...</p>
+                )}
               </div>
             )}
 
@@ -433,6 +423,6 @@ function GameRoom() {
       </div>
     </>
   );
-};
+}
 
 export default GameRoom;
