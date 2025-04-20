@@ -2,6 +2,7 @@
 import React, { useContext } from 'react';
 import { GameContext } from '../context/GameContext';
 import { getSpecialTile } from '../utils/constants';
+import Tile from './Tile';
 
 const boardSize = 15;
 
@@ -29,14 +30,16 @@ const ScrabbleBoard = () => {
                   key={`${row}-${col}`}
                   className={`tile flex items-center justify-center text-sm font-bold ${
                     tile?.class || ''
-                  } ${placedTile ? 'placed bg-scrabble-beige' : ''}`}
+                  } ${placedTile ? 'placed' : ''}`}
                   onClick={() => handlePlaceTile(row, col)}
                 >
                   {placedTile ? (
-                    <>
-                      <span className="tile-letter">{placedTile.letter}</span>
-                      <span className="tile-score">{placedTile.score}</span>
-                    </>
+                    <Tile
+                      letter={placedTile.letter}
+                      score={placedTile.score}
+                      isSelected={false}
+                      isPlaced={true}
+                    />
                   ) : (
                     tile?.text || (row === 7 && col === 7 ? '★' : '')
                   )}
