@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import io from 'socket.io-client';
 
-const socket = io('https://acrophylia.onrender.com', {
+const socket = io('https://rabble-l5gj.onrender.com', {
   withCredentials: true,
   transports: ['websocket', 'polling']
 });
