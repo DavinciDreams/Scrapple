@@ -77,6 +77,39 @@ export const GameProvider = ({ children }) => {
       socket.off('error');
     };
   }, [socket]);
+useEffect(() => {
+  if (!socket) return;
+
+  socket.on('gameStateUpdate', (newState) => {
+    setBoard(newState.board);
+    setPlayerTiles(newState.playerTiles || []);
+    setPlacedTiles(newState.placedTiles || []);
+  });
+
+  socket.on('tilePlaced', ({ row, col, tile }) => {
+    const newBoard = [...board];
+    newBoard[row][col] = tile;
+    setBoard(newBoard);
+    setPlacedTiles([...placedTiles, { row, col, tile }]);
+  });
+
+  socket.on('wordSubmitted', ({ word, score }) => {
+    alert(`Word submitted: ${word}, Score: ${score}`);
+  });
+
+  socket.on('error', (message) => {
+    alert(message);
+  });
+
+  drawTiles(7);
+
+  return () => {
+    socket.off('gameStateUpdate');
+    socket.off('tilePlaced');
+    socket.off('wordSubmitted');
+    socket.off('error');
+  };
+}, [socket]);
 
   return (
     <GameContext.Provider
