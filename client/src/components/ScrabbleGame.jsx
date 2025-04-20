@@ -1,24 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import ScrabbleBoard from './ScrabbleBoard';
+import { useRouter } from 'next/router';
+import io from 'socket.io-client';
 
-const tileBag = [
-  { letter: 'A', score: 1, count: 9 }, { letter: 'B', score: 3, count: 2 },
-  { letter: 'C', score: 3, count: 2 }, { letter: 'D', score: 2, count: 4 },
-  { letter: 'E', score: 1, count: 12 }, { letter: 'F', score: 4, count: 2 },
-  { letter: 'G', score: 2, count: 3 }, { letter: 'H', score: 4, count: 2 },
-  { letter: 'I', score: 1, count: 9 }, { letter: 'J', score: 8, count: 1 },
-  { letter: 'K', score: 5, count: 1 }, { letter: 'L', score: 1, count: 4 },
-  { letter: 'M', score: 3, count: 2 }, { letter: 'N', score: 1, count: 6 },
-  { letter: 'O', score: 1, count: 8 }, { letter: 'P', score: 3, count: 2 },
-  { letter: 'Q', score: 10, count: 1 }, { letter: 'R', score: 1, count: 6 },
-  { letter: 'S', score: 1, count: 4 }, { letter: 'T', score: 1, count: 6 },
-  { letter: 'U', score: 1, count: 4 }, { letter: 'V', score: 4, count: 2 },
-  { letter: 'W', score: 4, count: 2 }, { letter: 'X', score: 8, count: 1 },
-  { letter: 'Y', score: 4, count: 2 }, { letter: 'Z', score: 10, count: 1 },
-  { letter: '*', score: 0, count: 2 }
-];
+const socket = io('https://acrophylia.onrender.com', {
+  withCredentials: true,
+  transports: ['polling'],
+  reconnection: true,
+  reconnectionAttempts: 15,
+  reconnectionDelay: 1000,
+  timeout: 30000,
+});
 
-const ScrabbleGame = ({ roomId, players, isCreator, socket }) => {
+const ScrabbleGame = () => {
+  const router = useRouter();
+  const [roomId, players, isCreator, socket] = Router.query;
   const [board, setBoard] = useState(Array(15).fill().map(() => Array(15).fill(null)));
   const [playerTiles, setPlayerTiles] = useState([]);
   const [selectedTile, setSelectedTile] = useState(null);
@@ -28,6 +24,22 @@ const ScrabbleGame = ({ roomId, players, isCreator, socket }) => {
   const [validationError, setValidationError] = useState(null);
   const [score, setScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(null);
+  const tileBag = [
+    { letter: 'A', score: 1, count: 9 }, { letter: 'B', score: 3, count: 2 },
+    { letter: 'C', score: 3, count: 2 }, { letter: 'D', score: 2, count: 4 },
+    { letter: 'E', score: 1, count: 12 }, { letter: 'F', score: 4, count: 2 },
+    { letter: 'G', score: 2, count: 3 }, { letter: 'H', score: 4, count: 2 },
+    { letter: 'I', score: 1, count: 9 }, { letter: 'J', score: 8, count: 1 },
+    { letter: 'K', score: 5, count: 1 }, { letter: 'L', score: 1, count: 4 },
+    { letter: 'M', score: 3, count: 2 }, { letter: 'N', score: 1, count: 6 },
+    { letter: 'O', score: 1, count: 8 }, { letter: 'P', score: 3, count: 2 },
+    { letter: 'Q', score: 10, count: 1 }, { letter: 'R', score: 1, count: 6 },
+    { letter: 'S', score: 1, count: 4 }, { letter: 'T', score: 1, count: 6 },
+    { letter: 'U', score: 1, count: 4 }, { letter: 'V', score: 4, count: 2 },
+    { letter: 'W', score: 4, count: 2 }, { letter: 'X', score: 8, count: 1 },
+    { letter: 'Y', score: 4, count: 2 }, { letter: 'Z', score: 10, count: 1 },
+    { letter: '*', score: 0, count: 2 }
+];
 
   useEffect(() => {
     if (!socket) return;
@@ -155,6 +167,15 @@ const ScrabbleGame = ({ roomId, players, isCreator, socket }) => {
     return seconds <= 300; // 5 minutes or less
   };
 
+  const [isStarting, setIsStarting] = useState(false);
+ 
+  const handleStartGame = () => {
+    if (!isCreator || isStarting) return;
+    setIsStarting(true);
+    socket.emit('startGame', { roomId, gameDuration: 30 }); // 30 minute game
+    setTimeout(() => setIsStarting(false), 1000);
+  };
+
   return (
     <div className="scrabble-game">
       {validationError && (
@@ -192,6 +213,16 @@ const ScrabbleGame = ({ roomId, players, isCreator, socket }) => {
       </div>
       
       <div className="game-controls">
+           {isCreator && gameState === 'waiting' && (
+          <button
+            className="control-button primary"
+            onClick={handleStartGame}
+            disabled={isStarting}
+          >
+            {isStarting ? 'Starting...' : 'Start Game'}
+          </button>  
+          )}
+
         <button 
           className="control-button"
           onClick={shuffleTiles}
