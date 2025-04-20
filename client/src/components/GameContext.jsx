@@ -1,6 +1,7 @@
 // context/GameContext.jsx
 import { createContext, useState, useEffect } from 'react';
 import { useSocket } from '../hooks/useSocket';
+import { useSocketEvents } from '../utils/socketEvents';
 
 export const GameContext = createContext();
 
@@ -14,12 +15,6 @@ export const GameProvider = ({ children }) => {
   const [playerTiles, setPlayerTiles] = useState([]);
   const [selectedTile, setSelectedTile] = useState(null);
   const [placedTiles, setPlacedTiles] = useState([]);
-  const [tileBag, setTileBag] = useState([
-    ...Array(9).fill({ letter: 'A', score: 1 }),
-    ...Array(2).fill({ letter: 'B', score: 3 }),
-    // ... (from HTML template's tileBag)
-    ...Array(2).fill({ letter: '*', score: 0 }),
-  ]);
 
   const placeTile = (row, col, tileIndex, playerId) => {
     if (!playerTiles[tileIndex] || board[row][col]) return;
@@ -35,26 +30,26 @@ export const GameProvider = ({ children }) => {
 
   const drawTiles = (count) => {
     const newTiles = [];
-    const newBag = [...tileBag];
-    for (let i = 0; i < count && newBag.length > 0; i++) {
-      const randomIndex = Math.floor(Math.random() * newBag.length);
-      newTiles.push(newBag[randomIndex]);
-      newBag.splice(randomIndex, 1);
+    const tileBag = [
+      ...Array(9).fill({ letter: 'A', score: 1 }),
+      ...Array(2).fill({ letter: 'B', score: 3 }),
+      // ... (complete from HTML template)
+    ];
+    for (let i = 0; i < count && tileBag.length > 0; i++) {
+      const randomIndex = Math.floor(Math.random() * tileBag.length);
+      newTiles.push(tileBag[randomIndex]);
+      tileBag.splice(randomIndex, 1);
     }
     setPlayerTiles([...playerTiles, ...newTiles]);
-    setTileBag(newBag);
   };
 
-  useEffect(() => {
-    if (!socket) return;
-
-    socket.on('gameStateUpdate', (newState) => {
+  useSocketEvents(socket, {
+    onGameStateUpdate: (newState) => {
       setBoard(newState.board);
       setPlayerTiles(newState.playerTiles || []);
       setPlacedTiles(newState.placedTiles || []);
-    });
-
-    socket.on('tilePlaced', ({ row, col, tile }) => {
+    },
+    onTilePlaced: ({ row, col, tile }) => {
       const newBoard = [...board];
       newBoard[row][col] = tile;
       setBoard(newBoard);
@@ -62,54 +57,18 @@ export const GameProvider = ({ children }) => {
       if (playerTiles.some(t => t.letter === tile.letter && t.score === tile.score)) {
         setPlayerTiles(playerTiles.filter(t => t.letter !== tile.letter || t.score !== tile.score));
       }
-    });
-
-    socket.on('error', (message) => {
+    },
+    onWordSubmitted: ({ word, score }) => {
+      alert(`Word submitted: ${word}, Score: ${score}`);
+    },
+    onError: (message) => {
       alert(message);
-    });
+    },
+  });
 
-    // Initial tile draw
-    drawTiles(7);
-
-    return () => {
-      socket.off('gameStateUpdate');
-      socket.off('tilePlaced');
-      socket.off('error');
-    };
+  useEffect(() => {
+    if (socket) drawTiles(7);
   }, [socket]);
-useEffect(() => {
-  if (!socket) return;
-
-  socket.on('gameStateUpdate', (newState) => {
-    setBoard(newState.board);
-    setPlayerTiles(newState.playerTiles || []);
-    setPlacedTiles(newState.placedTiles || []);
-  });
-
-  socket.on('tilePlaced', ({ row, col, tile }) => {
-    const newBoard = [...board];
-    newBoard[row][col] = tile;
-    setBoard(newBoard);
-    setPlacedTiles([...placedTiles, { row, col, tile }]);
-  });
-
-  socket.on('wordSubmitted', ({ word, score }) => {
-    alert(`Word submitted: ${word}, Score: ${score}`);
-  });
-
-  socket.on('error', (message) => {
-    alert(message);
-  });
-
-  drawTiles(7);
-
-  return () => {
-    socket.off('gameStateUpdate');
-    socket.off('tilePlaced');
-    socket.off('wordSubmitted');
-    socket.off('error');
-  };
-}, [socket]);
 
   return (
     <GameContext.Provider
