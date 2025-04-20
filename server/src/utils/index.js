@@ -35,3 +35,18 @@ io.on('connection', (socket) => {
     }
   });
 });
+io.on('connection', (socket) => {
+  socket.on('createRoom', ({ playerName }) => {
+    const roomId = generateRoomId(); // e.g., UUID
+    socket.join(roomId);
+    socket.emit('roomCreated', { roomId });
+  });
+  socket.on('joinRoom', ({ roomId, playerName }) => {
+    if (io.sockets.adapter.rooms.has(roomId)) {
+      socket.join(roomId);
+      socket.emit('roomJoined', { roomId });
+    } else {
+      socket.emit('error', 'Room does not exist');
+    }
+  });
+});
