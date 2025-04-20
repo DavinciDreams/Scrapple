@@ -1,4 +1,4 @@
-// components/PlayerRack.jsx
+// client/src/components/PlayerRack.jsx (from prior update)
 import { useContext } from 'react';
 import { GameContext } from '../context/GameContext';
 import Tile from './Tile';
@@ -6,22 +6,29 @@ import Tile from './Tile';
 const PlayerRack = () => {
   const { playerTiles, selectedTile, setSelectedTile } = useContext(GameContext);
 
-  const handleSelectTile = (index) => {
-    setSelectedTile(index === selectedTile ? null : index);
+  const handleTileClick = (tile, index) => {
+    if (selectedTile?.index === index) {
+      setSelectedTile(null); // Deselect if already selected
+    } else {
+      setSelectedTile({ ...tile, index }); // Select the tile
+    }
   };
 
   return (
-    <div className="flex justify-center gap-2.5 mt-5 max-w-[600px] flex-wrap mx-auto">
-      {playerTiles.map((tile, index) => (
-        <Tile
-          key={index}
-          letter={tile.letter}
-          score={tile.score}
-          isSelected={selectedTile === index}
-          onClick={() => handleSelectTile(index)}
-          isPlaced={false}
-        />
-      ))}
+    <div className="flex space-x-2 p-4 bg-gray-200 rounded-lg">
+      {playerTiles.length === 0 ? (
+        <p className="text-gray-500">No tiles available. Waiting for tiles...</p>
+      ) : (
+        playerTiles.map((tile, index) => (
+          <Tile
+            key={`${tile.letter}-${index}`}
+            letter={tile.letter}
+            score={tile.score}
+            onClick={() => handleTileClick(tile, index)}
+            isSelected={selectedTile?.index === index}
+          />
+        ))
+      )}
     </div>
   );
 };
