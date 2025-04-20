@@ -41,10 +41,11 @@
   display: grid;
   grid-template-columns: repeat(15, 1fr);
   gap: 2px;
-  background-color: #8B4513;
-  border: 5px solid #8B4513;
+  background-color: #138b71;
+  border: 5px solid #138b71;
   aspect-ratio: 1;
   margin: 0 auto;
+  padding: 10px;
 }
 
 .tile {
