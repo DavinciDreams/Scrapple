@@ -15,6 +15,8 @@ export const GameProvider = ({ children }) => {
   const [playerTiles, setPlayerTiles] = useState([]);
   const [selectedTile, setSelectedTile] = useState(null);
   const [placedTiles, setPlacedTiles] = useState([]);
+  const [scores, setScores] = useState({});
+  const [currentTurn, setCurrentTurn] = useState(null);
 
   const placeTile = (row, col, tileIndex, playerId) => {
     if (!playerTiles[tileIndex] || board[row][col]) return;
@@ -29,25 +31,19 @@ export const GameProvider = ({ children }) => {
   };
 
   const drawTiles = (count) => {
-    const newTiles = [];
-    const tileBag = [
-      ...Array(9).fill({ letter: 'A', score: 1 }),
-      ...Array(2).fill({ letter: 'B', score: 3 }),
-      // ... (complete from HTML template)
-    ];
-    for (let i = 0; i < count && tileBag.length > 0; i++) {
-      const randomIndex = Math.floor(Math.random() * tileBag.length);
-      newTiles.push(tileBag[randomIndex]);
-      tileBag.splice(randomIndex, 1);
-    }
-    setPlayerTiles([...playerTiles, ...newTiles]);
+    socket.emit('drawTiles', {
+      roomId: window.location.pathname.split('/').pop(),
+      count,
+    });
   };
 
   useSocketEvents(socket, {
     onGameStateUpdate: (newState) => {
-      setBoard(newState.board);
-      setPlayerTiles(newState.playerTiles || []);
+      setBoard(newState.board || Array(15).fill().map(() => Array(15).fill(null)));
+      setPlayerTiles(newState.playerTiles?.[socket.id] || []);
       setPlacedTiles(newState.placedTiles || []);
+      setScores(newState.scores || {});
+      setCurrentTurn(newState.currentTurn || null);
     },
     onTilePlaced: ({ row, col, tile }) => {
       const newBoard = [...board];
@@ -67,12 +63,28 @@ export const GameProvider = ({ children }) => {
   });
 
   useEffect(() => {
-    if (socket) drawTiles(7);
+    if (socket) {
+      socket.emit('requestGameState', {
+        roomId: window.location.pathname.split('/').pop(),
+      });
+    }
   }, [socket]);
 
   return (
     <GameContext.Provider
-      value={{ board, setBoard, playerTiles, setPlayerTiles, selectedTile, setSelectedTile, placedTiles, placeTile, drawTiles }}
+      value={{
+        board,
+        setBoard,
+        playerTiles,
+        setPlayerTiles,
+        selectedTile,
+        setSelectedTile,
+        placedTiles,
+        placeTile,
+        drawTiles,
+        scores,
+        currentTurn,
+      }}
     >
       {children}
     </GameContext.Provider>
