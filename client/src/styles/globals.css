@@ -68,3 +68,9 @@
 .double-word { background-color: #FFB6C1; }
 .triple-letter { background-color: #00B7EB; }
 .double-letter { background-color: #87CEEB; }
+/* styles/globals.css */
+.scrabble-brown { background-color: #8B4513; }
+.scrabble-brown-dark { background-color: #A0522D; }
+.scrabble-beige { background-color: #FFF8DC; }
+.tile-letter { font-size: 1.5em; font-weight: bold; color: #000; }
+.tile-score { font-size: 0.7em; color: #555; }
