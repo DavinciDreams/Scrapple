@@ -2,7 +2,7 @@
 import { useContext } from 'react';
 import { GameContext } from '../context/GameContext';
 import { useSocket } from '../hooks/useSocket';
-import { getSpecialTile } from '../utils/constants';
+import { getSpecialTile } from '../../../server/src/utils/constants';
 
 const GameControls = () => {
   const { playerTiles, placedTiles, board, drawTiles, currentTurn } = useContext(GameContext);

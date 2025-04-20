@@ -1,7 +1,7 @@
 // components/ScrabbleBoard.jsx
 import React, { useContext } from 'react';
 import { GameContext } from '../context/GameContext';
-import { getSpecialTile } from '../utils/constants';
+import { getSpecialTile } from '../../../server/src/utils/constants';
 import Tile from './Tile';
 import { useSocket } from '../hooks/useSocket';
 
