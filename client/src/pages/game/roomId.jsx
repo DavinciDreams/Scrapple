@@ -5,6 +5,7 @@ import { GameProvider } from '../../context/GameContext';
 import ScrabbleBoard from '../../components/ScrabbleBoard';
 import PlayerRack from '../../components/PlayerRack';
 import GameControls from '../../components/GameControls';
+import GameStatus from '../../components/GameStatus';
 import { useSocket } from '../../hooks/useSocket';
 
 const GameRoom = () => {
@@ -29,6 +30,7 @@ const GameRoom = () => {
     <GameProvider>
       <div className="container max-w-[800px] mx-auto py-6">
         <h1 className="text-2xl font-bold text-center mb-6">Rabble - Room {roomId}</h1>
+        <GameStatus />
         <ScrabbleBoard />
         <PlayerRack />
         <GameControls />
