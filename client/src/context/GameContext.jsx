@@ -1,7 +1,7 @@
-// context/GameContext.jsx
+// client/src/context/GameContext.jsx
 import { createContext, useState, useEffect } from 'react';
 import { useSocket } from '../hooks/useSocket';
-import { useSocketEvents } from '../../../server/src/utils/socketEvents';
+import { useSocketEvents } from '../utils/socketEvents';
 
 export const GameContext = createContext();
 

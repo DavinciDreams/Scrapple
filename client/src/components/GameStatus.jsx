@@ -2,7 +2,7 @@
 import { useContext, useState } from 'react';
 import { GameContext } from '../context/GameContext';
 import { useSocket } from '../hooks/useSocket';
-import { useSocketEvents } from '../../../server/src/utils/socketEvents';
+import { useSocketEvents } from '../utils/socketEvents';
 
 const GameStatus = () => {
   const { playerTiles } = useContext(GameContext);
