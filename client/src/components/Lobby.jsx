@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useSocket } from '../hooks/useSocket';
-import { useSocketEvents } from '../../../server/src/utils/socketEvents';
+import { useSocketEvents } from '../utils/socketEvents';
 
 const Lobby = () => {
   const socket = useSocket();
