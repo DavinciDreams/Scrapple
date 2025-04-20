@@ -39,7 +39,7 @@
 /* styles/globals.css */
 .scrabble-board {
   display: grid;
-  grid-template-columns: repeat(15, 40px);
+  grid-template-columns: repeat(15, 1fr);
   gap: 2px;
   background-color: #138b71;
   border: 5px solid #138b71;
