@@ -3,15 +3,22 @@ import React, { useContext } from 'react';
 import { GameContext } from '../context/GameContext';
 import { getSpecialTile } from '../utils/constants';
 import Tile from './Tile';
+import { useSocket } from '../hooks/useSocket';
 
 const boardSize = 15;
 
 const ScrabbleBoard = () => {
-  const { board, selectedTile, placeTile, playerTiles } = useContext(GameContext);
+  const { board, selectedTile, placeTile, playerTiles, currentTurn } = useContext(GameContext);
+  const socket = useSocket();
+  const isMyTurn = currentTurn === socket?.id;
 
   const handlePlaceTile = (row, col) => {
+    if (!isMyTurn) {
+      alert('Not your turn!');
+      return;
+    }
     if (selectedTile !== null && playerTiles[selectedTile]) {
-      placeTile(row, col, selectedTile, 'player-id'); // Replace with actual playerId
+      placeTile(row, col, selectedTile, socket.id);
     }
   };
 
