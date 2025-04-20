@@ -15,3 +15,23 @@ io.on('connection', (socket) => {
     }
   });
 });
+// server/index.js (assumed)
+io.on('connection', (socket) => {
+  socket.on('submitWord', async ({ roomId, word, score }) => {
+    const gameState = getGameState(roomId);
+    // Validate word (server-side for security)
+    try {
+      const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word.toLowerCase()}`);
+      if (response.ok) {
+        gameState.scores[socket.id] = (gameState.scores[socket.id] || 0) + score;
+        gameState.placedTiles = [];
+        io.to(roomId).emit('gameStateUpdate', gameState);
+        io.to(roomId).emit('wordSubmitted', { word, score });
+      } else {
+        socket.emit('error', 'Invalid word!');
+      }
+    } catch (error) {
+      socket.emit('error', 'Error validating word.');
+    }
+  });
+});
