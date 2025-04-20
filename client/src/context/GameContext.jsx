@@ -1,5 +1,6 @@
 // client/src/context/GameContext.jsx
 import { createContext, useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
 import { useSocket } from '../hooks/useSocket';
 import { useSocketEvents } from '../utils/socketEvents';
 
@@ -7,6 +8,7 @@ export const GameContext = createContext();
 
 export const GameProvider = ({ children }) => {
   const socket = useSocket();
+  const router = useRouter();
   const [board, setBoard] = useState(
     Array(15)
       .fill()
@@ -59,6 +61,11 @@ export const GameProvider = ({ children }) => {
     },
     onError: (message) => {
       alert(message);
+      router.push('/');
+    },
+    onRoomJoined: () => {
+      // Automatically draw 7 tiles when joining the room
+      drawTiles(7);
     },
   });
 

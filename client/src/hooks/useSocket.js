@@ -1,6 +1,6 @@
-// hooks/useSocket.js
+// client/src/hooks/useSocket.js
 import { useEffect, useState } from 'react';
-import io from 'socket.io-client';
+import { io } from 'socket.io-client';
 
 const SOCKET_URL = 'https://rabble-l5gj.onrender.com';
 
@@ -8,23 +8,29 @@ export const useSocket = () => {
   const [socket, setSocket] = useState(null);
 
   useEffect(() => {
-    const newSocket = io(SOCKET_URL, {
+    const socketIo = io(SOCKET_URL, {
       transports: ['websocket'],
-      withCredentials: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
     });
 
-    newSocket.on('connect', () => {
-      console.log('Connected to server');
+    socketIo.on('connect', () => {
+      console.log('Connected to server:', socketIo.id);
+      setSocket(socketIo);
     });
 
-    newSocket.on('connect_error', (err) => {
-      console.error('Connection error:', err);
+    socketIo.on('connect_error', (error) => {
+      console.log('Socket connection error:', error.message);
     });
 
-    setSocket(newSocket);
+    socketIo.on('disconnect', () => {
+      console.log('Disconnected from server');
+      setSocket(null);
+    });
 
     return () => {
-      newSocket.disconnect();
+      socketIo.disconnect();
     };
   }, []);
 
