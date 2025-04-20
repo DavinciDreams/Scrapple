@@ -5,8 +5,8 @@
 
 @layer base {
   :root {
-    --scrabble-brown: #8B4513;
-    --scrabble-brown-dark: #A0522D;
+    --scrabble-brown: #1e82c0;
+    --scrabble-brown-dark: #1b65a9;
     --scrabble-beige: #FFF8DC;
     --scrabble-hover: #FFFACD;
   }
