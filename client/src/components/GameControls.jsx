@@ -5,33 +5,44 @@ import { useSocket } from '../hooks/useSocket';
 import { getSpecialTile } from '../utils/constants';
 
 const GameControls = () => {
-  const { playerTiles, placedTiles, board, drawTiles } = useContext(GameContext);
+  const { playerTiles, placedTiles, board, drawTiles, currentTurn } = useContext(GameContext);
   const socket = useSocket();
+  const isMyTurn = currentTurn === socket?.id;
 
   const handleResetBoard = () => {
+    if (!isMyTurn) {
+      alert('Not your turn!');
+      return;
+    }
     socket.emit('resetBoard', {
       roomId: window.location.pathname.split('/').pop(),
     });
   };
 
   const handleShuffleTiles = () => {
+    if (!isMyTurn) {
+      alert('Not your turn!');
+      return;
+    }
     socket.emit('shuffleTiles', {
       roomId: window.location.pathname.split('/').pop(),
     });
   };
 
   const handleSubmitWord = async () => {
+    if (!isMyTurn) {
+      alert('Not your turn!');
+      return;
+    }
     if (placedTiles.length === 0) {
       alert('Place some tiles first!');
       return;
     }
-    // Check first move hits center
     const isFirstMove = board.flat().every(cell => cell === null);
     if (isFirstMove && !placedTiles.some(t => t.row === 7 && t.col === 7)) {
       alert('First move must include the center star!');
       return;
     }
-    // Check connection
     if (!isFirstMove) {
       const connected = placedTiles.some(({ row, col }) => {
         return (
@@ -46,13 +57,11 @@ const GameControls = () => {
         return;
       }
     }
-    // Get word
     const word = getWordFromTiles();
     if (!word) {
       alert('Tiles must form a horizontal or vertical word!');
       return;
     }
-    // Validate
     try {
       const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word.toLowerCase()}`);
       if (response.ok) {
@@ -107,20 +116,29 @@ const GameControls = () => {
   return (
     <div className="flex gap-4 justify-center mt-5 flex-wrap">
       <button
-        className="px-5 py-2.5 text-white bg-scrabble-brown rounded-md hover:bg-scrabble-brown-dark transition-colors duration-200"
+        className={`px-5 py-2.5 text-white rounded-md transition-colors duration-200 ${
+          isMyTurn ? 'bg-scrabble-brown hover:bg-scrabble-brown-dark' : 'bg-gray-400 cursor-not-allowed'
+        }`}
         onClick={handleResetBoard}
+        disabled={!isMyTurn}
       >
         Reset Board
       </button>
       <button
-        className="px-5 py-2.5 text-white bg-scrabble-brown rounded-md hover:bg-scrabble-brown-dark transition-colors duration-200"
+        className={`px-5 py-2.5 text-white rounded-md transition-colors duration-200 ${
+          isMyTurn ? 'bg-scrabble-brown hover:bg-scrabble-brown-dark' : 'bg-gray-400 cursor-not-allowed'
+        }`}
         onClick={handleShuffleTiles}
+        disabled={!isMyTurn}
       >
         Shuffle Tiles
       </button>
       <button
-        className="px-5 py-2.5 text-white bg-scrabble-brown rounded-md hover:bg-scrabble-brown-dark transition-colors duration-200"
+        className={`px-5 py-2.5 text-white rounded-md transition-colors duration-200 ${
+          isMyTurn ? 'bg-scrabble-brown hover:bg-scrabble-brown-dark' : 'bg-gray-400 cursor-not-allowed'
+        }`}
         onClick={handleSubmitWord}
+        disabled={!isMyTurn}
       >
         Submit Word
       </button>
