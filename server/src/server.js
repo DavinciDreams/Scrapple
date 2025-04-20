@@ -5,7 +5,7 @@ const { Server } = require('socket.io');
 const server = http.createServer();
 const io = new Server(server, {
   cors: {
-    origin: ['*', 'https://rabble-nine.vercel.app/'], // Replace with your Vercel URL in production (e.g., https://your-vercel-url)
+    origin: ['*', 'https://scrapple.vercel.app//'], // Replace with your Vercel URL in production (e.g., https://your-vercel-url)
     methods: ['GET', 'POST'],
   },
 });
@@ -196,6 +196,94 @@ io.on('connection', (socket) => {
       }
     }
   });
+});
+
+// assign room id
+const { createServer } = require('http');
+const { Server } = require('socket.io');
+
+const server = createServer();
+const io = new Server(server, {
+  cors: {
+    origin: 'https://scrapple.vercel.app',
+    methods: ['GET', 'POST'],
+  },
+});
+
+const rooms = new Map();
+
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+
+  socket.on('createRoom', () => {
+    const roomId = Math.random().toString(36).substring(2, 8); // Generate a 6-character room ID
+    rooms.set(roomId, { players: [socket.id], gameState: {} });
+    socket.join(roomId);
+    socket.emit('roomCreated', { roomId });
+    console.log(`Room created: ${roomId}`);
+  });
+
+  socket.on('joinRoom', ({ roomId, playerName }) => {
+    if (!rooms.has(roomId)) {
+      socket.emit('error', 'Room does not exist');
+      return;
+    }
+    const room = rooms.get(roomId);
+    room.players.push(socket.id);
+    socket.join(roomId);
+    socket.emit('roomJoined', { roomId, playerName });
+    io.to(roomId).emit('gameStateUpdate', room.gameState);
+    console.log(`${playerName} joined room: ${roomId}`);
+  });
+
+  socket.on('placeTile', ({ roomId, row, col, tile, playerId }) => {
+    if (!rooms.has(roomId)) return;
+    const room = rooms.get(roomId);
+    if (!room.gameState.board) {
+      room.gameState.board = Array(15).fill().map(() => Array(15).fill(null));
+    }
+    room.gameState.board[row][col] = tile;
+    io.to(roomId).emit('tilePlaced', { row, col, tile });
+    io.to(roomId).emit('gameStateUpdate', room.gameState);
+  });
+
+  socket.on('drawTiles', ({ roomId, count }) => {
+    if (!rooms.has(roomId)) return;
+    const room = rooms.get(roomId);
+    if (!room.gameState.playerTiles) {
+      room.gameState.playerTiles = {};
+    }
+    if (!room.gameState.playerTiles[socket.id]) {
+      room.gameState.playerTiles[socket.id] = [];
+    }
+    const newTiles = Array.from({ length: count }, () => ({
+      letter: String.fromCharCode(65 + Math.floor(Math.random() * 26)),
+      score: Math.floor(Math.random() * 10) + 1,
+    }));
+    room.gameState.playerTiles[socket.id].push(...newTiles);
+    io.to(roomId).emit('gameStateUpdate', room.gameState);
+  });
+
+  socket.on('requestGameState', ({ roomId }) => {
+    if (!rooms.has(roomId)) return;
+    const room = rooms.get(roomId);
+    socket.emit('gameStateUpdate', room.gameState);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
+    for (const [roomId, room] of rooms.entries()) {
+      room.players = room.players.filter((id) => id !== socket.id);
+      if (room.players.length === 0) {
+        rooms.delete(roomId);
+      }
+    }
+  });
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
 
 server.listen(process.env.PORT || 3000, () => {
