@@ -1,334 +1,203 @@
-const express = require('express');
+// server/server.js
 const http = require('http');
 const { Server } = require('socket.io');
-const cors = require('cors');
-const { ScrabbleGame } = require('./utils/scrabbleLogic');
-const { addBotPlayers } = require('./utils/botLogic');
 
-require('dotenv').config();
-
-const app = express();
-const server = http.createServer(app);
-
-const allowedOrigins = [
-  "http://localhost:3000",
-  "https://urban-succotash-p9rqv5qxxg5cr4v4-3000.app.github.dev",
-  "https://acrophylia.vercel.app",
-  "https://*.vercel.app"
-];
-
-app.use(cors({
-  origin: allowedOrigins,
-  methods: ["GET", "POST"],
-  credentials: true
-}));
-
+const server = http.createServer();
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST"],
-    credentials: true
+    origin: ['*', 'https://rabble-nine.vercel.app/'], // Replace with your Vercel URL in production (e.g., https://your-vercel-url)
+    methods: ['GET', 'POST'],
+  },
+});
+
+// In-memory game state (replace with database like MongoDB for production)
+const games = new Map();
+
+const getGameState = (roomId) => {
+  if (!games.has(roomId)) {
+    games.set(roomId, {
+      board: Array(15).fill().map(() => Array(15).fill(null)),
+      placedTiles: [],
+      scores: {},
+      playerTiles: {},
+      currentTurn: null,
+      tileBag: [
+        ...Array(9).fill({ letter: 'A', score: 1 }),
+        ...Array(2).fill({ letter: 'B', score: 3 }),
+        ...Array(2).fill({ letter: 'C', score: 3 }),
+        ...Array(4).fill({ letter: 'D', score: 2 }),
+        ...Array(12).fill({ letter: 'E', score: 1 }),
+        ...Array(2).fill({ letter: 'F', score: 4 }),
+        ...Array(3).fill({ letter: 'G', score: 2 }),
+        ...Array(2).fill({ letter: 'H', score: 4 }),
+        ...Array(9).fill({ letter: 'I', score: 1 }),
+        ...Array(1).fill({ letter: 'J', score: 8 }),
+        ...Array(1).fill({ letter: 'K', score: 5 }),
+        ...Array(4).fill({ letter: 'L', score: 1 }),
+        ...Array(2).fill({ letter: 'M', score: 3 }),
+        ...Array(6).fill({ letter: 'N', score: 1 }),
+        ...Array(8).fill({ letter: 'O', score: 1 }),
+        ...Array(2).fill({ letter: 'P', score: 3 }),
+        ...Array(1).fill({ letter: 'Q', score: 10 }),
+        ...Array(6).fill({ letter: 'R', score: 1 }),
+        ...Array(4).fill({ letter: 'S', score: 1 }),
+        ...Array(6).fill({ letter: 'T', score: 1 }),
+        ...Array(4).fill({ letter: 'U', score: 1 }),
+        ...Array(2).fill({ letter: 'V', score: 4 }),
+        ...Array(2).fill({ letter: 'W', score: 4 }),
+        ...Array(1).fill({ letter: 'X', score: 8 }),
+        ...Array(2).fill({ letter: 'Y', score: 4 }),
+        ...Array(1).fill({ letter: 'Z', score: 10 }),
+        ...Array(2).fill({ letter: '*', score: 0 }),
+      ],
+    });
   }
-});
+  return games.get(roomId);
+};
 
-app.get('/', (req, res) => {
-  res.send('Scrabble Game Server is running. Connect via the frontend.');
-});
+const generateRoomId = () => {
+  return Math.random().toString(36).slice(2, 8);
+};
 
-const rooms = new Map();
+const drawTiles = (roomId, socketId, count) => {
+  const gameState = getGameState(roomId);
+  const tileBag = gameState.tileBag;
+  const tiles = [];
+  for (let i = 0; i < count && tileBag.length > 0; i++) {
+    const index = Math.floor(Math.random() * tileBag.length);
+    tiles.push(tileBag.splice(index, 1)[0]);
+  }
+  gameState.playerTiles[socketId] = [...(gameState.playerTiles[socketId] || []), ...tiles];
+  return tiles;
+};
 
 io.on('connection', (socket) => {
-  console.debug('New client connected:', socket.id);
+  console.log('Client connected:', socket.id);
 
-  socket.on('createRoom', () => {
-    const roomId = Math.random().toString(36).substr(2, 9);
-    rooms.set(roomId, {
-      name: `Room ${roomId}`,
-      creatorId: socket.id,
-      players: [{ id: socket.id, name: '', score: 0, isBot: false }],
-      started: false,
-      game: null,
-      gameTimer: null,
-      gameDuration: null,
-      gameStartTime: null
-    });
-    
+  socket.on('createRoom', ({ playerName }) => {
+    const roomId = generateRoomId();
     socket.join(roomId);
-    socket.emit('roomCreated', roomId);
-    io.to(roomId).emit('playerUpdate', { 
-      players: rooms.get(roomId).players, 
-      roomName: rooms.get(roomId).name 
-    });
+    const gameState = getGameState(roomId);
+    gameState.playerTiles[socket.id] = drawTiles(roomId, socket.id, 7);
+    gameState.currentTurn = socket.id; // First player starts
+    socket.emit('roomCreated', { roomId });
+    io.to(roomId).emit('gameStateUpdate', gameState);
   });
 
-  socket.on('joinRoom', ({ roomId, creatorId }) => {
-    let room = rooms.get(roomId);
-    if (!room) {
-      room = {
-        name: `Room ${roomId}`,
-        creatorId: null,
-        players: [],
-        started: false,
-      };
-      rooms.set(roomId, room);
-    }
-
-    const isOriginalCreator = creatorId && creatorId === room.creatorId;
-    const playerExists = room.players.some(player => player.id === socket.id);
-
-    if (isOriginalCreator && room.creatorId !== socket.id) {
-      const oldCreatorIndex = room.players.findIndex(p => p.id === room.creatorId);
-      if (oldCreatorIndex !== -1) {
-        room.players[oldCreatorIndex].id = socket.id;
-        room.creatorId = socket.id;
-      }
-    } else if (!playerExists) {
-      room.players.push({ id: socket.id, name: '', score: 0, isBot: false });
-    }
-
-    if (!room.creatorId && room.players.length > 0) {
-      room.creatorId = room.players[0].id;
-    }
-
-    socket.join(roomId);
-    const isCreator = socket.id === room.creatorId;
-    socket.emit('roomJoined', { roomId, isCreator, roomName: room.name });
-
-    io.to(roomId).emit('playerUpdate', { players: room.players, roomName: room.name });
-    if (room.started) {
-      socket.emit('gameStarted');
-      socket.emit('boardUpdate', {
-        board: room.game.board,
-        lastMove: room.game.lastMove
-      });
-      const playerTiles = room.game.getPlayerTiles(socket.id);
-      if (playerTiles) {
-        socket.emit('tileUpdate', { newTiles: playerTiles });
-      }
-      socket.emit('turnUpdate', { currentPlayer: room.game.currentTurn });
-    }
-
-    io.to(roomId).emit('playerUpdate', { players: room.players, roomName: room.name });
-  });
-
-  socket.on('setRoomName', ({ roomId, roomName }) => {
-    const room = rooms.get(roomId);
-    if (room && socket.id === room.creatorId && !room.started) {
-      room.name = roomName.trim().substring(0, 20); // Sanitize and limit length
-      io.to(roomId).emit('playerUpdate', { players: room.players, roomName: room.name });
+  socket.on('joinRoom', ({ roomId, playerName }) => {
+    if (io.sockets.adapter.rooms.has(roomId)) {
+      socket.join(roomId);
+      const gameState = getGameState(roomId);
+      gameState.playerTiles[socket.id] = drawTiles(roomId, socket.id, 7);
+      if (!gameState.currentTurn) gameState.currentTurn = socket.id;
+      socket.emit('roomJoined', { roomId });
+      io.to(roomId).emit('gameStateUpdate', gameState);
+    } else {
+      socket.emit('error', 'Room does not exist');
     }
   });
 
-  socket.on('setName', ({ roomId, name }) => {
-    const room = rooms.get(roomId);
-    if (room) {
-      const player = room.players.find(p => p.id === socket.id);
-      if (player && !player.isBot) {
-        player.name = name.trim().substring(0, 20);
-        io.to(roomId).emit('playerUpdate', { players: room.players, roomName: room.name });
-      }
-    }
-  });
-  socket.on('startGame', ({ roomId, gameDuration }) => {
-    const room = rooms.get(roomId);
-    if (room && socket.id === room.creatorId && !room.started) {
-      room.started = true;
-      room.gameDuration = gameDuration * 60; // Convert minutes to seconds
-      room.gameStartTime = Date.now();
-      room.game = new ScrabbleGame(); // Initialize new game
-
-      // Add players and send initial tiles
-      room.players.forEach(player => {
-        const tiles = room.game.addPlayer(player.id);
-        io.to(player.id).emit('tileUpdate', { newTiles: tiles });
-      });
-
-      // Initialize game timer
-      const startTime = Date.now();
-      room.gameTimer = setInterval(() => {
-        const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
-        const remainingSeconds = room.gameDuration - elapsedSeconds;
-        
-        if (remainingSeconds <= 0) {
-          clearInterval(room.gameTimer);
-          const winner = room.players.reduce((prev, curr) => prev.score > curr.score ? prev : curr);
-          io.to(roomId).emit('gameEnd', { winner });
-          room.started = false;
-        } else {
-          io.to(roomId).emit('timeUpdate', { timeLeft: remainingSeconds });
-        }
-      }, 1000);
-
-      // Notify clients that game has started
-      io.to(roomId).emit('gameStarted');
-      io.to(roomId).emit('turnUpdate', { currentPlayer: room.game.currentTurn });
-      io.to(roomId).emit('playerUpdate', { players: room.players, roomName: room.name });
-      io.to(roomId).emit('boardUpdate', {
-        board: room.game.board,
-        lastMove: null
-      });
+  socket.on('requestGameState', ({ roomId }) => {
+    if (io.sockets.adapter.rooms.has(roomId)) {
+      const gameState = getGameState(roomId);
+      socket.emit('gameStateUpdate', gameState);
+    } else {
+      socket.emit('error', 'Room does not exist');
     }
   });
 
-  socket.on('placeTile', ({ roomId, row, col, tile, tileIndex }) => {
-    const room = rooms.get(roomId);
-    if (!room || !room.started || room.game.currentTurn !== socket.id) return;
-
-    const placement = { row, col, tile };
-    room.game.board[row][col] = tile;
-    
-    io.to(roomId).emit('boardUpdate', {
-      board: room.game.board,
-      lastMove: placement
-    });
-  });
-  socket.on('submitMove', async ({ roomId, placedTiles }) => {
-    const room = rooms.get(roomId);
-    if (!room || !room.started) {
-      socket.emit('moveError', { message: 'Game has not started' });
+  socket.on('placeTile', ({ roomId, row, col, tile, playerId }) => {
+    const gameState = getGameState(roomId);
+    if (gameState.currentTurn !== socket.id) {
+      socket.emit('error', 'Not your turn!');
       return;
     }
-    
-    if (room.game.currentTurn !== socket.id) {
-      socket.emit('moveError', { message: 'Not your turn' });
+    if (!gameState.board[row][col]) {
+      gameState.board[row][col] = tile;
+      gameState.placedTiles.push({ row, col, tile });
+      io.to(roomId).emit('tilePlaced', { row, col, tile });
+      io.to(roomId).emit('gameStateUpdate', gameState);
+    } else {
+      socket.emit('error', 'Tile already placed!');
+    }
+  });
+
+  socket.on('submitWord', async ({ roomId, word, score }) => {
+    const gameState = getGameState(roomId);
+    if (gameState.currentTurn !== socket.id) {
+      socket.emit('error', 'Not your turn!');
       return;
     }
-
     try {
-      const moveResult = await room.game.makeMove(socket.id, placedTiles);
-      if (moveResult) {
-        const gameState = room.game.getGameState();
-        io.to(roomId).emit('boardUpdate', {
-          board: gameState.board,
-          lastMove: gameState.lastMove
-        });
-        
-        room.players.forEach(player => {
-          const playerState = gameState.players.find(p => p.id === player.id);
-          if (playerState) {
-            player.score = playerState.score;
-          }
-          if (player.id === socket.id) {
-            const newTiles = room.game.getPlayerTiles(player.id);
-            io.to(player.id).emit('tileUpdate', { newTiles });
-          }
-        });
-
-        io.to(roomId).emit('playerUpdate', { players: room.players, roomName: room.name });
-        io.to(roomId).emit('turnUpdate', { currentPlayer: gameState.currentTurn });
-
-        if (gameState.remainingTiles === 0) {
-          const winner = room.players.reduce((prev, curr) => 
-            prev.score > curr.score ? prev : curr
-          );
-          io.to(roomId).emit('gameEnd', { winner });
-          room.started = false;
-        }
+      const response = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${word.toLowerCase()}`);
+      if (response.ok) {
+        gameState.scores[socket.id] = (gameState.scores[socket.id] || 0) + score;
+        gameState.placedTiles = [];
+        // Rotate turn
+        const players = Object.keys(gameState.playerTiles);
+        const currentIndex = players.indexOf(gameState.currentTurn);
+        gameState.currentTurn = players[(currentIndex + 1) % players.length] || players[0];
+        io.to(roomId).emit('wordSubmitted', { word, score });
+        io.to(roomId).emit('gameStateUpdate', gameState);
       } else {
-        socket.emit('moveError', { message: 'Invalid move - please check word placement' });
+        socket.emit('error', 'Invalid word!');
       }
     } catch (error) {
-      console.error('Move error:', error);
-      socket.emit('moveError', { message: 'An error occurred while validating your move' });
+      socket.emit('error', 'Error validating word.');
     }
   });
 
-
-  socket.on('resetGame', (roomId) => {
-    const room = rooms.get(roomId);
-    if (room && socket.id === room.creatorId) {
-      room.game = new ScrabbleGame();
-      
-      // Clear all timers
-      if (room.gameTimer) clearInterval(room.gameTimer);
-      room.gameTimer = null;
-      room.gameDuration = null;
-      room.gameStartTime = null;
-
-      // Reset game state
-      room.started = false;
-      room.players.forEach(player => { player.score = 0 });
-      io.to(roomId).emit('playerUpdate', { players: room.players, roomName: room.name });
-      io.to(roomId).emit('gameReset');
+  socket.on('resetBoard', ({ roomId }) => {
+    const gameState = getGameState(roomId);
+    if (gameState.currentTurn !== socket.id) {
+      socket.emit('error', 'Not your turn!');
+      return;
     }
+    gameState.board = Array(15).fill().map(() => Array(15).fill(null));
+    gameState.placedTiles = [];
+    io.to(roomId).emit('gameStateUpdate', gameState);
   });
 
-  socket.on('sendMessage', ({ roomId, message }) => {
-    const room = rooms.get(roomId);
-    if (room) {
-      const player = room.players.find(p => p.id === socket.id);
-      if (player) {
-        const senderName = player.name || socket.id;
-        io.to(roomId).emit('chatMessage', { senderId: socket.id, senderName, message });
-      }
+  socket.on('shuffleTiles', ({ roomId }) => {
+    const gameState = getGameState(roomId);
+    if (gameState.currentTurn !== socket.id) {
+      socket.emit('error', 'Not your turn!');
+      return;
     }
+    const tiles = gameState.playerTiles[socket.id];
+    gameState.playerTiles[socket.id] = tiles.sort(() => Math.random() - 0.5);
+    io.to(roomId).emit('gameStateUpdate', gameState);
   });
 
-  socket.on('leaveRoom', (roomId) => {
-    const room = rooms.get(roomId);
-    if (room) {
-      const playerIndex = room.players.findIndex(p => p.id === socket.id);
-      if (playerIndex !== -1) {
-        room.players.splice(playerIndex, 1);
-        socket.leave(roomId);
-        io.to(roomId).emit('playerUpdate', { players: room.players, roomName: room.name });
-        if (socket.id === room.creatorId && room.players.length > 0) {
-          room.creatorId = room.players[0].id;
-          io.to(roomId).emit('creatorUpdate', room.creatorId);
-        }
-      }
+  socket.on('drawTiles', ({ roomId, count }) => {
+    const gameState = getGameState(roomId);
+    if (gameState.currentTurn !== socket.id) {
+      socket.emit('error', 'Not your turn!');
+      return;
     }
+    drawTiles(roomId, socket.id, count);
+    io.to(roomId).emit('gameStateUpdate', gameState);
   });
 
   socket.on('disconnect', () => {
-    rooms.forEach((room, roomId) => {
-      const playerIndex = room.players.findIndex(p => p.id === socket.id);
-      if (playerIndex !== -1) {
-        room.players.splice(playerIndex, 1);
-        io.to(roomId).emit('playerUpdate', { players: room.players, roomName: room.name });
-        if (socket.id === room.creatorId && room.players.length > 0) {
-          room.creatorId = room.players[0].id;
-          io.to(roomId).emit('creatorUpdate', room.creatorId);
+    console.log('Client disconnected:', socket.id);
+    // Clean up game state
+    for (const [roomId, gameState] of games) {
+      if (gameState.playerTiles[socket.id]) {
+        delete gameState.playerTiles[socket.id];
+        delete gameState.scores[socket.id];
+        const players = Object.keys(gameState.playerTiles);
+        if (players.length > 0 && gameState.currentTurn === socket.id) {
+          gameState.currentTurn = players[0];
+        } else if (players.length === 0) {
+          games.delete(roomId);
         }
+        io.to(roomId).emit('gameStateUpdate', gameState);
       }
-    });
+    }
   });
 });
 
-async function startGame(roomId) {
-  const room = rooms.get(roomId);
-  while (room.players.length < 4) {
-    room.players = addBotPlayers(room.players, 1);
-    const newBot = room.players[room.players.length - 1];
-    io.to(roomId).emit('chatMessage', {
-      senderId: newBot.id,
-      senderName: newBot.name,
-      message: `${newBot.name} has joined the chat!`
-    });
-  }
-
-  // Initialize game timer
-  const startTime = Date.now();
-  room.gameTimer = setInterval(() => {
-    const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
-    const remainingSeconds = room.gameDuration - elapsedSeconds;
-    
-    if (remainingSeconds <= 0) {
-      clearInterval(room.gameTimer);
-      const winner = room.players.reduce((prev, curr) => prev.score > curr.score ? prev : curr);
-      io.to(roomId).emit('gameEnd', { winner });
-      room.started = false;
-    } else {
-      io.to(roomId).emit('timeUpdate', { timeLeft: remainingSeconds });
-    }
-  }, 1000);
-
-  io.to(roomId).emit('playerUpdate', { players: room.players, roomName: room.name });
-  room.started = true;
-  io.to(roomId).emit('gameStarted');
-}
-
-const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT} - v1.0`);
+server.listen(process.env.PORT || 3000, () => {
+  console.log('Socket.IO server running on port', process.env.PORT || 3000);
 });
