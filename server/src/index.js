@@ -5,7 +5,7 @@ const { Server } = require('socket.io');
 const server = http.createServer();
 const io = new Server(server, {
   cors: {
-    origin: 'https://rabble-nine.vercel.app/', // Replace with Vercel URL in production
+    origin: 'https://scrapple.vercel.app//', // Replace with Vercel URL in production
     methods: ['GET', 'POST'],
   },
 });
