@@ -20,18 +20,24 @@ export default function Lobby() {
     }
   }, [socket]);
 
-  const handleCreateRoom = () => {
-    if (!playerName) {
-      alert('Please enter your player name');
-      return;
+ const handleCreateRoom = () => {
+  if (!playerName) {
+    alert('Please enter your player name');
+    return;
+  }
+  if (!socket) {
+    alert('Cannot connect to server. Please try again later.');
+    return;
+  }
+  setIsCreatingRoom(true);
+  socket.emit('createRoom');
+  setTimeout(() => {
+    if (isCreatingRoom) {
+      alert('Room creation timed out. Please try again.');
+      setIsCreatingRoom(false);
     }
-    if (!socket) {
-      alert('Cannot connect to server. Please try again later.');
-      return;
-    }
-    setIsCreatingRoom(true);
-    socket.emit('createRoom');
-  };
+  }, 5000); // 5-second timeout
+};
 
   const handleJoinRoom = () => {
     if (!playerName) {
