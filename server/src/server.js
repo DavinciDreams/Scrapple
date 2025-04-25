@@ -5,7 +5,7 @@ const { Server } = require('socket.io');
 const server = createServer();
 const io = new Server(server, {
   cors: {
-    origin: 'https://scrapple.vercel.app',
+    origin: '*','https://scrapple.vercel.app',
     methods: ['GET', 'POST'],
   },
 });
@@ -117,3 +117,6 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+socket.emit('roomCreated', { roomId });
+console.log('Emitted roomCreated to:', socket.id);
